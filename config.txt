@@ -1,0 +1,2 @@
+gatk_path = /home/marta/tools/GenomeAnalysisTK.jar
+picard_path = /home/marta/tools/picard.jar

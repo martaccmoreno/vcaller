@@ -1,6 +1,14 @@
 import click
-from subprocess import run, call, check_output
+from subprocess import run, call
 import os
+
+#### IMPORT CONFIG ####
+
+config = {}
+with open(os.path.join(os.path.dirname(__file__), 'config.txt'), 'r') as cfg:
+    for line in cfg:
+        path = line.split('=')
+        config[path[0].strip()] = path[1].strip()
 
 
 @click.group()
@@ -92,16 +100,12 @@ def call():
 
 
 @call.command('gatk')
-@click.option('--gatk-path', '-g', default=None, type=click.Path(exists=True),
-              help='Define the path leading to the GenomeAnalysisTK.jar file. By default, if no path is specified,'
-                   'the command will attempt to find the jar file using the "locate" shell command.')
-@click.option('--picard-path', '-p', default=None, type=click.Path(exists=True))
 @click.option('--name', '-n', default='gatk_out', help='Name of the output file (extension will be added automatically)')
 @click.option('--known-snps', '-k', default=None, type=click.Path(exists=True))
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_gatk(gatk_path, picard_path, name, known_snps, reference, sample1, sample2):
+def call_gatk(name, known_snps, reference, sample1, sample2):
     """Use the GATK's HaplotypeCaller algorithm to call variants on aligned sequence files (samples).
     Specifying a dbSNP file with a list of known SNPs is highly recommended.
     Only one sequence file has to be specified. Sequences must have been previously aligned.
@@ -121,12 +125,12 @@ def call_gatk(gatk_path, picard_path, name, known_snps, reference, sample1, samp
     if not all([os.path.isfile(ifile) for ifile in sample_indices]): # if not all indices exist
         click.echo('Indexing sample input files...')
         index_args = ['samtools', 'index'] + sample_list
+        run(index_args)
     ### Missing .dict file + READGROUPS
 
     # run GATK-HC
-    if gatk_path is None:
-        gatk_path = check_output(['locate', 'GenomeAnalysisTK.jar']) # need to check if locate plays nice with "fresh installs"
-    gatk_args = ['java', '-jar', gatk_path.strip(), '-R', reference, '-T', 'HaplotypeCaller', '-I'] + sample_list + \
+    click.echo('Calling variants with GATK-HC...')
+    gatk_args = ['java', '-jar', config['gatk_path'], '-R', reference, '-T', 'HaplotypeCaller', '-I'] + sample_list + \
                 ['-stand_call_conf', '20', '-o', name+'.vcf']
     click.echo('Ready to ruuuuumble!!!')
-    #run(gatk_args)
+    run(gatk_args)
