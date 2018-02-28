@@ -1,3 +1,3 @@
 gatk_path = /home/marta/tools/GenomeAnalysisTK.jar
 picard_path = /home/marta/tools/picard.jar
-working_directory = ...
+working_directory = .
