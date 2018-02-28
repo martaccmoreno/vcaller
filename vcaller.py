@@ -2,7 +2,7 @@ import click
 from subprocess import run, call
 import os
 
-#### IMPORT CONFIG ####
+##### IMPORT CONFIG #####
 
 config = {}
 with open(os.path.join(os.path.dirname(__file__), 'config.txt'), 'r') as cfg:
@@ -10,6 +10,17 @@ with open(os.path.join(os.path.dirname(__file__), 'config.txt'), 'r') as cfg:
         path = line.split('=')
         config[path[0].strip()] = path[1].strip()
 
+
+##### AUXILIARY FUNCTIONS #####
+
+def check_existence(filename_list):
+    """Check if files with the filenames in the list already exist in the working directory."""
+    if sum([os.path.isfile(ifile) for ifile in filename_list]) == len(filename_list):
+        return True
+    else:
+        return False
+
+##### MAIN GROUP #####
 
 @click.group()
 @click.version_option()
@@ -47,14 +58,12 @@ def align():
 @click.option('--nthreads', '-t', default='1', help='Number of CPU threads to use during the alignment step.')
 @click.option('--check_index', '-i', is_flag=True, help='Check if reference is already indexed, and if yes prompt '
                                                         'the user to skip that step.')
-@click.option('--sort/--no-sort', default=True, help='Whether the resulting alignment file should be sorted and'
-                                                     'converted to BAM.')
 # CHECK IF POSSIBLE TO HAVE AN OPTION DEFINED FOR MULTIPLE COMMANDS
 @click.option('--clean-up', '-c', default=True, help='Clean up intermediary files to save disk space.')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('read1', type=click.Path(exists=True))
 @click.argument('read2', required=False, type=click.Path(exists=True))
-def align_bwa(name, nthreads, check_index, sort, clean_up, reference, read1, read2):
+def align_bwa(name, nthreads, check_index, clean_up, reference, read1, read2):
     """Use the BWA-MEM algorithm for alignment. Requires bwa.
     It is only mandatory to include the reference genome file and a sample read as arguments.
     If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
@@ -65,33 +74,25 @@ def align_bwa(name, nthreads, check_index, sort, clean_up, reference, read1, rea
     # (FLAG) check_index: check if already indexed
     if check_index:
         suffix_list = ['.amb', '.ann', '.bwt', '.pac', '.sa']
-        index_files = [reference + suffix for suffix in suffix_list]
-        if sum([os.path.isfile(ifile) for ifile in index_files]) == len(suffix_list):
-            click.echo('Index files already exist!')
-            index_confirmation = input('Are you sure you want to skip the reference genome indexing step? [y/n]: ')
-            if index_confirmation.lower() == 'y' or index_confirmation.lower() == 'yes':
-                to_index = False
-                click.echo('Skipping reference genome indexing.')
+        if check_existence([reference + suffix for suffix in suffix_list]):
+            click.echo('Index files already exist!\n Skipping reference genome indexing.')
         else:
-            click.echo('Need to generate index files!')
-    if to_index:
-        click.echo('Indexing the provided reference genome...')
-        run(['bwa', 'index', reference])
+            click.echo('Need to generate index files!\n Indexing reference genome %s...' % reference)
+            run(['bwa', 'index', reference])
 
     # Align input sequences to the reference genome
     # Missing: Read group info (deal with it in another command?)
     align_args = ['bwa', 'mem', '-M', '-t', nthreads, reference, read1, read2]
     with open(name + '.sam', "w+") as align_out:
         call(align_args, stdout=align_out)
-    if sort:
-        click.echo('Sorting and converting to BAM...')
-        sort_args = ['samtools', 'sort', '-O', 'bam', '-o', name + '.bam', '-T', '/tmp/lane_temp', name + '.sam']
-        run(sort_args)
+    click.echo('Sorting and converting to BAM...')
+    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', name + '.bam', '-T', '/tmp/lane_temp', name + '.sam']
+    run(sort_args)
 
-        # clean up
-        if clean_up:
-            clean_args = ['rm', name + '.sam']
-            run(clean_args)
+    # clean up
+    if clean_up:
+        clean_args = ['rm', name + '.sam']
+        run(clean_args)
 
 ##### VARIANT CALLING #####
 @cli.group(short_help='Call variants on mapped sequences.')
@@ -114,23 +115,25 @@ def call_gatk(name, known_snps, reference, sample1, sample2):
     # CHECK IF FILE IS SAM/BAM, ALIGNED, SUCH AND SUCH
     # ...
     # check samtools faidx
-    if not os.path.isfile(reference+'.fai'):
+    if check_existence([reference+'.fai']):
+        click.echo('Reference faidx index file already exists!\n Skipping faidx indexing.')
         click.echo('Indexing reference file %s...' % reference)
         faidx_args = ['samtools', 'faidx', reference]
         run(faidx_args)
 
     # check samtools index on each sample (flag to turn it off)
     sample_list = [sample1] + [s for s in sample2]
-    sample_indices = [sample+'.bai' for sample in sample_list]
-    if not all([os.path.isfile(ifile) for ifile in sample_indices]): # if not all indices exist
-        click.echo('Indexing sample input files...')
+    if check_existence([sample+'.bai' for sample in sample_list]):
+        click.echo('Sample index .bai files already exist!\n Skipping sample indexing.')
+    else:
+        click.echo('Need to generate sample index .bai files!\n Indexing sample files %s...' % ', '.join(sample_list))
         index_args = ['samtools', 'index'] + sample_list
         run(index_args)
     ### Missing .dict file + READGROUPS
 
     # run GATK-HC
-    click.echo('Calling variants with GATK-HC...')
+    click.echo('Calling variants on samples %s with GATK-HC...' % ', '.join(sample_list))
     gatk_args = ['java', '-jar', config['gatk_path'], '-R', reference, '-T', 'HaplotypeCaller', '-I'] + sample_list + \
                 ['-stand_call_conf', '20', '-o', name+'.vcf']
-    click.echo('Ready to ruuuuumble!!!')
+    click.echo('Ready to ruuuuumble!!!') # test echo, to remove later
     run(gatk_args)
