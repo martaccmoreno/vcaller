@@ -82,18 +82,20 @@ def align_bwa(name, nthreads, check_index, clean_up, reference, read1, read2):
     # Align input sequences to the reference genome
     click.echo('Aligning read(s) against the reference genome...') # find way to make message fancier with custom names
     align_args = ['bwa', 'mem', '-M', '-t', nthreads, reference, read1, read2]
-    with open(name + '.sam', "w+") as align_out:
+    output_name=name+'.sam'
+    with open(output_name, "w+") as align_out:
         call(align_args, stdout=align_out)
 
     # Sort and convert to BAM
     click.echo('Sorting and converting to BAM...')
-    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', name + '.bam', '-T', '/tmp/lane_temp', name + '.sam']
+    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', name + '.bam', '-T', '/tmp/lane_temp', output_name]
     run(sort_args)
 
 
     # clean up intermediary files
     if clean_up:
-        run(['rm', name + '.sam'])
+        click.echo('Cleaning up %s...' % output_name)
+        run(['rm', name + output_name])
 
 @align.command('bowtie2')
 @click.option('--name', '-n', default='bowtie2_out', help='Name of the output file (extension will be added automatically)')
@@ -128,25 +130,27 @@ def align_bwa(name, check_index, clean_up, reference, read1, read2):
 
 
     # Align the input reads against the reference genome
+    output_name = name+'.sam'
     if read2 is None: # if read is single-ended
-        align_args = [config['bowtie2_path']+'/bowtie2', '-x', ref_basename, read1, '-S', name+'.sam']
+        align_args = [config['bowtie2_path']+'/bowtie2', '-x', ref_basename, read1, '-S', output_name]
         click.echo('Aligning read %s against the reference genome...' % read1)
     else: # if paired_end
         align_args = [config['bowtie2_path']+'/bowtie2', '-x', ref_basename,
-                      '-1', read1, '-2', read2, '-S', name+'.sam']
+                      '-1', read1, '-2', read2, '-S', output_name]
         click.echo('Aligning reads %s %s against the reference genome...' % (read1, read2))
     run(align_args)
 
 
     # Sort and convert to BAM
     click.echo('Sorting and converting to BAM...')
-    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', name + '.bam', '-T', '/tmp/lane_temp', name + '.sam']
+    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', name + '.bam', '-T', '/tmp/lane_temp', name + output_name]
     run(sort_args)
 
 
     # clean up intermediary files
     if clean_up:
-        run(['rm', name + '.sam'])
+        click.echo('Cleaning up %s...' % output_name)
+        run(['rm', output_name])
 
 
 ##### POST-PROCESSING #####
@@ -204,7 +208,6 @@ def call_gatk(name, platform, library, sample, known_snps, clean_up, reference, 
 
     # read groups
     # only works for 1 library atm
-    # how to check if RG already exists?
     sample_list = [sample1] + [s for s in sample2]
     sample_rg_list = [sample.split('.')[0]+'_rg.bam' for sample in sample_list]
     if check_existence(sample_rg_list):
@@ -241,10 +244,8 @@ def call_gatk(name, platform, library, sample, known_snps, clean_up, reference, 
     run(gatk_args)
 
 
-
-
-
     # clean up intermediary files
     if clean_up:
         for sample in sample_list:
+            click.echo('Cleaning up %s...' % sample)
             run(['rm', sample])
