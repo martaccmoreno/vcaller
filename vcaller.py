@@ -56,7 +56,7 @@ def align():
 @click.option('--check_index', '-i', is_flag=True, help='Check if reference is already indexed, and if yes prompt '
                                                         'the user to skip that step.')
 # CHECK IF POSSIBLE TO HAVE AN OPTION DEFINED FOR MULTIPLE COMMANDS
-@click.option('--clean-up', '-c', default=True, help='Clean up intermediary files to save disk space.')
+@click.option('--clean-up', '-c', default=False, help='Clean up intermediary files to save disk space.')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('read1', type=click.Path(exists=True))
 @click.argument('read2', required=False, type=click.Path(exists=True))
@@ -99,7 +99,7 @@ def align_bwa(name, nthreads, check_index, clean_up, reference, read1, read2):
 @click.option('--name', '-n', default='bowtie2_out', help='Name of the output file (extension will be added automatically)')
 @click.option('--check_index', '-i', is_flag=True, help='Check if reference is already indexed, and if yes prompt '
                                                         'the user to skip that step.')
-@click.option('--clean-up', '-c', default=True, help='Clean up intermediary files to save disk space.')
+@click.option('--clean-up', '-c', default=False, help='Clean up intermediary files to save disk space.')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('read1', type=click.Path(exists=True))
 @click.argument('read2', required=False, type=click.Path(exists=True))
