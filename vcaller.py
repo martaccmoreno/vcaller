@@ -171,7 +171,7 @@ def call():
 @click.option('--known-snps', '-k', default=None, type=click.Path(exists=True), help='dbSNP file containing a database \
                                                                                      of known SNPs to help improve \
                                                                                      variant calling results.')
-@click.option('--clean-up', '-c', default=True, help='Clean up intermediary files to save disk space.')
+@click.option('--clean-up', '-c', default=False, help='Clean up intermediary files to save disk space.')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
@@ -217,21 +217,23 @@ def call_gatk(name, platform, library, sample, known_snps, clean_up, reference, 
     # only works for 1 library atm
     # how to check if RG already exists?
     for sample in sample_list:
+        click.echo('Adding Read Group information...')
         read_groups = {'ID': sample.split('.')[0], 'PL': platform, 'LB': library, 'PU': 'foo', 'SM': sample}
         rg_args = ['java', '-jar', config['picard_path'], 'AddOrReplaceReadGroups', 'I='+sample,
                    'O='+sample.split('.')[0]+'_rg.bam', 'RGID='+read_groups['ID'], 'RGLB='+read_groups['LB'],
                    'RGPL='+read_groups['PL'], 'RGPU='+read_groups['PU'], 'RGSM='+read_groups['SM']]
         click.echo(rg_args)
         run(rg_args)
-
+    sample_rg_list = [sample.split('.')[0]+'_rg.bam' for sample in sample_list]
 
     # run GATK-HC
     click.echo('Calling variants on samples %s with GATK-HC...' % ', '.join(sample_list))
     if known_snps is None:
-        gatk_args = ['java', '-jar', config['gatk_path'], '-R', reference, '-T', 'HaplotypeCaller', '-I'] + sample_list + \
+        # each sample needs to be preceed by an -I so this is not working for more than one sample?
+        gatk_args = ['java', '-jar', config['gatk_path'], '-R', reference, '-T', 'HaplotypeCaller', '-I'] + sample_rg_list + \
                 ['-stand_call_conf', '20', '-o', name+'.vcf'] # confidence of call is not flexible atm, always 20
     else:
-        gatk_args = ['java', '-jar', config['gatk_path'], '-R', reference, '-T', 'HaplotypeCaller', '-I'] + sample_list + \
+        gatk_args = ['java', '-jar', config['gatk_path'], '-R', reference, '-T', 'HaplotypeCaller', '-I'] + sample_rg_list + \
                     ['--dbsnp', known_snps, '-stand_call_conf', '20', '-o', name+'.vcf']
     run(gatk_args)
 
