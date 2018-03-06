@@ -182,8 +182,7 @@ def call_gatk(name, platform, library, sample, known_snps, clean_up, reference, 
     Files must be in the SAM/BAM format. A reference genome must be specified.
     """
 
-
-    # samtools faidx
+    # samtools faidx on REFERENCE
     if check_existence([reference+'.fai']):
         click.echo('Reference faidx index file already exists!\nSkipping faidx indexing.')
     else:
@@ -192,42 +191,46 @@ def call_gatk(name, platform, library, sample, known_snps, clean_up, reference, 
         run(faidx_args)
 
 
-    # samtools index on each sample
-    sample_list = [sample1] + [s for s in sample2]
-    if check_existence([sample+'.bai' for sample in sample_list]):
-        click.echo('Sample index .bai files already exist!\nSkipping sample indexing.')
-    else:
-        click.echo('Need to generate sample index .bai files!\nIndexing sample files %s...' % ', '.join(sample_list))
-        index_args = ['samtools', 'index'] + sample_list
-        run(index_args)
-
-
-    # .dict dictionary file
+    # generate .dict dictionary file for REFERENCE
     dict_file = reference.split('.')[0]+'.dict'
     if check_existence([dict_file]):
         click.echo('Dictionary file %s already exists.\nSkipping reference genome dictionary file generation.' % dict_file)
     else:
         click.echo('Generating reference genome dictionary %s...' % dict_file)
         dict_vars = ['java', '-jar', config['picard_path'], 'CreateSequenceDictionary', 'R=%s' % reference,
-                 'O=%s' % dict_file]
+                     'O=%s' % dict_file]
         run(dict_vars)
 
 
     # read groups
     # only works for 1 library atm
     # how to check if RG already exists?
-    for sample in sample_list:
-        click.echo('Adding Read Group information...')
-        read_groups = {'ID': sample.split('.')[0], 'PL': platform, 'LB': library, 'PU': 'foo', 'SM': sample}
-        rg_args = ['java', '-jar', config['picard_path'], 'AddOrReplaceReadGroups', 'I='+sample,
-                   'O='+sample.split('.')[0]+'_rg.bam', 'RGID='+read_groups['ID'], 'RGLB='+read_groups['LB'],
-                   'RGPL='+read_groups['PL'], 'RGPU='+read_groups['PU'], 'RGSM='+read_groups['SM']]
-        click.echo(rg_args)
-        run(rg_args)
+    sample_list = [sample1] + [s for s in sample2]
     sample_rg_list = [sample.split('.')[0]+'_rg.bam' for sample in sample_list]
+    if check_existence(sample_rg_list):
+        click.echo('Read group information has already been added for %s.' % ', '.join(sample_list))
+    else:
+        for sample in sample_list:
+            click.echo('Adding Read Group information for %s...' % sample)
+            read_groups = {'ID': sample.split('.')[0], 'PL': platform, 'LB': library, 'PU': 'foo', 'SM': sample}
+            rg_args = ['java', '-jar', config['picard_path'], 'AddOrReplaceReadGroups', 'I='+sample,
+                       'O='+sample.split('.')[0]+'_rg.bam', 'RGID='+read_groups['ID'], 'RGLB='+read_groups['LB'],
+                       'RGPL='+read_groups['PL'], 'RGPU='+read_groups['PU'], 'RGSM='+read_groups['SM']]
+            click.echo(rg_args)
+            run(rg_args)
+
+
+    # samtools index on each SAMPLE
+    if check_existence([sample+'.bai' for sample in sample_rg_list]):
+        click.echo('Sample index .bai files already exist!\nSkipping sample indexing.')
+    else:
+        click.echo('Need to generate sample index .bai files!\nIndexing sample files %s...' % ', '.join(sample_rg_list))
+        index_args = ['samtools', 'index'] + sample_rg_list
+        run(index_args)
+
 
     # run GATK-HC
-    click.echo('Calling variants on samples %s with GATK-HC...' % ', '.join(sample_list))
+    click.echo('Calling variants on samples %s with GATK-HC...' % ', '.join(sample_rg_list))
     if known_snps is None:
         # each sample needs to be preceed by an -I so this is not working for more than one sample?
         gatk_args = ['java', '-jar', config['gatk_path'], '-R', reference, '-T', 'HaplotypeCaller', '-I'] + sample_rg_list + \
@@ -236,6 +239,9 @@ def call_gatk(name, platform, library, sample, known_snps, clean_up, reference, 
         gatk_args = ['java', '-jar', config['gatk_path'], '-R', reference, '-T', 'HaplotypeCaller', '-I'] + sample_rg_list + \
                     ['--dbsnp', known_snps, '-stand_call_conf', '20', '-o', name+'.vcf']
     run(gatk_args)
+
+
+
 
 
     # clean up intermediary files
