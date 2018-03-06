@@ -1,5 +1,5 @@
 import click
-from subprocess import run, call
+from subprocess import run
 import os
 
 
@@ -81,10 +81,13 @@ def align_bwa(name, nthreads, check_index, clean_up, reference, read1, read2):
 
     # Align input sequences to the reference genome
     click.echo('Aligning read(s) against the reference genome...') # find way to make message fancier with custom names
-    align_args = ['bwa', 'mem', '-M', '-t', nthreads, reference, read1, read2]
+    align_args = ['bwa', 'mem', '-M', '-t', nthreads, reference, read1]
+    if read2 is not None:
+        align_args += read2
     output_name=name+'.sam'
-    with open(output_name, "w+") as align_out:
-        call(align_args, stdout=align_out)
+    with open(output_name, "w") as align_out:
+        print(align_args)
+        run(align_args, stdout=align_out)
 
     # Sort and convert to BAM
     click.echo('Sorting and converting to BAM...')
