@@ -227,10 +227,13 @@ def call_gatk(name, platform, library, sample, known_snps, clean_up, reference, 
 
     # run GATK-HC
     click.echo('Calling variants on samples %s with GATK-HC...' % ', '.join(sample_list))
-    gatk_args = ['java', '-jar', config['gatk_path'], '-R', reference, '-T', 'HaplotypeCaller', '-I'] + sample_list + \
-                ['-stand_call_conf', '20', '-o', name+'.vcf']
-    click.echo('Ready to ruuuuumble!!!') # test echo, to remove later
-    #run(gatk_args)
+    if known_snps is None:
+        gatk_args = ['java', '-jar', config['gatk_path'], '-R', reference, '-T', 'HaplotypeCaller', '-I'] + sample_list + \
+                ['-stand_call_conf', '20', '-o', name+'.vcf'] # confidence of call is not flexible atm, always 20
+    else:
+        gatk_args = ['java', '-jar', config['gatk_path'], '-R', reference, '-T', 'HaplotypeCaller', '-I'] + sample_list + \
+                    ['--dbsnp', known_snps, '-stand_call_conf', '20', '-o', name+'.vcf']
+    run(gatk_args)
 
 
     # clean up intermediary files
