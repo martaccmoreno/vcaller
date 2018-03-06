@@ -180,10 +180,21 @@ def call():
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
 def call_gatk(name, platform, library, sample, known_snps, clean_up, reference, sample1, sample2):
-    """Use the GATK's HaplotypeCaller algorithm to call variants on aligned sequence files (samples).
-    Specifying a dbSNP file with a list of known SNPs is highly recommended.
-    Only one sequence file has to be specified. Sequences must have been previously aligned.
-    Files must be in the SAM/BAM format. A reference genome must be specified.
+    """Call variants using GATK's HaplotypeCaller.
+    The GATK's HaplotypeCaller algorithm is used to call variants on aligned sequence files (samples).
+
+    Through the aforementioned algorithm, this command calls variants on input aligned sequence files (samples),
+    simplifying the operation thanks to performing all prerequisite processing steps required by GATK to call variants
+    on input files.
+
+    First, it prepares the reference by ensuring that it has been indexed through samtools faidx, and had a dictionary
+    generated through Picard's CreateSequenceDictionary. Then, it prepares the input samples by creating a new file
+    with proper read group (RG) information, and indexing each sample through samtools index. Lastly,
+    GATK-HC is run on these prepared files.
+
+    Specifying a dbSNP file with a list of known SNPs is highly recommended. Only one sample sequence file has to be
+    specified.  Sample sequences must have been previously aligned, so that they are in the SAM/BAM format.
+    A reference genome must be specified.
     """
 
     # samtools faidx on REFERENCE
@@ -209,7 +220,7 @@ def call_gatk(name, platform, library, sample, known_snps, clean_up, reference, 
     # read groups
     # only works for 1 library atm
     sample_list = [sample1] + [s for s in sample2]
-    sample_rg_list = [sample.split('.')[0]+'_rg.bam' for sample in sample_list]
+    sample_rg_list = [sample.split('.')[0]+'_rg.bam' for sample in sample_list] # make it more sam friendly: sample.split('.')[1] for 'bam'/'sam'
     if check_existence(sample_rg_list):
         click.echo('Read group information has already been added for %s.' % ', '.join(sample_list))
     else:
