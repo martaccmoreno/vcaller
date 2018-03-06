@@ -74,6 +74,9 @@ def align_bwa(name, nthreads, check_index, clean_up, reference, read1, read2):
         else:
             click.echo('Need to generate index files!\n Indexing reference genome %s...' % reference)
             run(['bwa', 'index', reference])
+    else:
+        click.echo('Indexing reference genome %s...' % reference)
+        run(['bwa', 'index', reference])
 
 
     # Align input sequences to the reference genome
@@ -101,7 +104,7 @@ def align_bwa(name, nthreads, check_index, clean_up, reference, read1, read2):
 @click.argument('read1', type=click.Path(exists=True))
 @click.argument('read2', required=False, type=click.Path(exists=True))
 def align_bwa(name, check_index, clean_up, reference, read1, read2):
-    """Use the bowtie2 algorithm for alignment. Requires bowtie2.
+    """Use the FM-index tool bowtie2 for alignment. Requires bowtie2.
     It is only mandatory to include the reference genome file and a sample read as arguments.
     If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
 
@@ -118,6 +121,10 @@ def align_bwa(name, check_index, clean_up, reference, read1, read2):
             index_args = [config['bowtie2_path']+'/bowtie2-build', reference, ref_basename] # last arg is the
                                                                                             # output name
             run(index_args)
+    else:
+        click.echo('Indexing reference genome %s...' % reference)
+        index_args = [config['bowtie2_path']+'/bowtie2-build', reference, ref_basename]
+        run(index_args)
 
 
     # Align the input reads against the reference genome
