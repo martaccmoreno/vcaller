@@ -227,13 +227,12 @@ def call_gatk(name, platform, library, sample, known_snps, clean_up, reference, 
     if check_existence(sample_rg_list):
         click.echo('Read group information has already been added for %s.' % ', '.join(sample_list))
     else:
-        for sample in sample_list:
-            click.echo('Adding Read Group information for %s...' % sample)
-            read_groups = {'ID': sample.split('.')[0], 'PL': platform, 'LB': library, 'PU': 'foo', 'SM': sample}
-            rg_args = ['java', '-jar', config['picard_path'], 'AddOrReplaceReadGroups', 'I='+sample,
-                       'O='+sample.split('.')[0]+'_rg.bam', 'RGID='+read_groups['ID'], 'RGLB='+read_groups['LB'],
+        for spl in sample_list:
+            click.echo('Adding Read Group information for %s...' % spl)
+            read_groups = {'ID': spl.split('.')[0], 'PL': platform, 'LB': library, 'PU': 'foo', 'SM': sample}
+            rg_args = ['java', '-jar', config['picard_path'], 'AddOrReplaceReadGroups', 'I='+spl,
+                       'O='+spl.split('.')[0]+'_rg.bam', 'RGID='+read_groups['ID'], 'RGLB='+read_groups['LB'],
                        'RGPL='+read_groups['PL'], 'RGPU='+read_groups['PU'], 'RGSM='+read_groups['SM']]
-            click.echo(rg_args)
             run(rg_args)
 
 
