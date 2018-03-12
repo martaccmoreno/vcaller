@@ -212,7 +212,7 @@ def call_gatk(name, platform, library, sample, known_snps, clean_up, reference, 
     # only works for 1 library atm
     sample_list = [sample1] + [s for s in sample2]
     sample_rg_list = [sample.split('.')[0] + '_rg.' + sample.split('.')[1] for sample in sample_list]
-    if check_existence([sample_rg_list]):
+    if check_existence(sample_rg_list):
         click.echo('Read group information has already been added for %s.' % ', '.join(sample_list))
     else:
         for smpl in sample_list:
