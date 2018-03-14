@@ -208,47 +208,25 @@ def call_gatk(name, platform, library, sample, known_snps, clean_up, reference, 
                      'O=%s' % dict_file]
         run(dict_vars)
 
-    # read groups on each SAMPLE
-    # only works for 1 library atm
     sample_list = [sample1] + [s for s in sample2]
-    sample_rg_list = [sample.split('.')[0] + '_rg.' + sample.split('.')[1] for sample in sample_list]
-    if check_existence(sample_rg_list):
-        click.echo('Read group information has already been added for %s.' % ', '.join(sample_list))
-    else:
-        for smpl in sample_list:
-            click.echo('Adding Read Group information for %s...' % smpl)
-            read_groups = {'ID': smpl.split('.')[0], 'PL': platform, 'LB': library, 'PU': 'foo', 'SM': sample}
-            rg_args = ['java', '-jar', config['picard_path'], 'AddOrReplaceReadGroups', 'I=' + smpl,
-                       'O=' + smpl.split('.')[0] + '_rg.bam', 'RGID=' + read_groups['ID'], 'RGLB=' + read_groups['LB'],
-                       'RGPL=' + read_groups['PL'], 'RGPU=' + read_groups['PU'], 'RGSM=' + read_groups['SM']]
-            run(rg_args)
-
     # samtools index on each SAMPLE
-    if check_existence([sample + '.bai' for sample in sample_rg_list]):
+    if check_existence([sample + '.bai' for sample in sample_list]):
         click.echo('Sample index .bai files already exist!\nSkipping sample indexing.')
     else:
-        click.echo('Need to generate sample index .bai files!\nIndexing sample files %s...' % ', '.join(sample_rg_list))
-        index_args = ['samtools', 'index'] + sample_rg_list
+        click.echo('Need to generate sample index .bai files!\nIndexing sample files %s...' % ', '.join(sample_list))
+        index_args = ['samtools', 'index'] + sample_list
         run(index_args)
 
     # run GATK-HC
-    click.echo('Calling variants on samples %s with GATK-HC...' % ', '.join(sample_rg_list))
+    click.echo('Calling variants on samples %s with GATK-HC...' % ', '.join(sample_list))
     if known_snps is None:
         # each sample needs to be preceed by an -I so this is not working for more than one sample?
-        gatk_args = ['java', '-jar', config['gatk_path'], '-R', reference, '-T', 'HaplotypeCaller',
-                     '-I'] + sample_rg_list + \
-                    ['-stand_call_conf', '20', '-o', name + '.vcf']  # confidence of call is not flexible atm, always 20
+        gatk_args = [config['gatk_path'], 'HaplotypeCaller', '-R', reference, '-I'] + sample_list + \
+                    ['-O', name + '.vcf']
     else:
-        gatk_args = ['java', '-jar', config['gatk_path'], '-R', reference, '-T', 'HaplotypeCaller',
-                     '-I'] + sample_rg_list + \
-                    ['--dbsnp', known_snps, '-stand_call_conf', '20', '-o', name + '.vcf']
+        gatk_args = [config['gatk_path'], 'HaplotypeCaller', '-R', reference, '-I'] + sample_list + \
+                    ['--dbsnp', known_snps, '-O', name + '.vcf']
     run(gatk_args)
-
-    # clean up intermediary files
-    if clean_up:
-        for sample in sample_list:
-            click.echo('Cleaning up %s...' % sample)
-            run(['rm', sample])
 
 
 @call.command('bcftools')
@@ -300,7 +278,7 @@ def call_bcftools(name, clean_up, reference, sample1, sample2):
 @click.argument('samples', required=True, type=click.Path(exists=True), nargs=-1)
 def process(platform, library, sample, known_indels, known_snps, reference, samples):
     """Performs a group of steps for the post-processing in preparation for variant calling
-    on one or more SAM/BAM sample files."""
+    on one or more SAM/BAM sample files. A must do for running the GATK subcommand."""
     sample_list = list(samples)
 
     # Create a directory structure to store post-processed files, only if it does not exist yet
@@ -318,9 +296,9 @@ def process(platform, library, sample, known_indels, known_snps, reference, samp
         if not check_existence([rg_output]):
             click.echo('Adding Read Group information to %s...' % smpl)
             read_groups = {'ID': smpl_name, 'PL': platform, 'LB': library, 'PU': 'foo', 'SM': sample}
-            rg_args = ['java', '-jar', config['picard_path'], 'AddOrReplaceReadGroups', 'I=' + smpl,
-                       'O=' + rg_output, 'RGID=' + read_groups['ID'], 'RGLB=' + read_groups['LB'],
-                       'RGPL=' + read_groups['PL'].upper(), 'RGPU=' + read_groups['PU'], 'RGSM=' + read_groups['SM']]
+            rg_args = [config['gatk_path'], 'AddOrReplaceReadGroups', '-I', smpl,
+                       '-O', rg_output, '-RGID', read_groups['ID'], '-RGLB', read_groups['LB'],
+                       '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM']]
             run(rg_args)
         # NOTE: "ERROR MESSAGE: The platform (ion proton) associated with read group GATKSAMReadGroupRecord
         # @RG:bowtie2_out is not a recognized platform. Allowable options are ILLUMINA,SLX,SOLEXA,SOLID,454,LS454,
@@ -331,12 +309,14 @@ def process(platform, library, sample, known_indels, known_snps, reference, samp
         if not check_existence([dup_output]):
             click.echo('Marking and removing duplicates for %s...' % smpl_name)
             # intermediary file
-            dup_args = ['java', '-jar', config['picard_path'], 'MarkDuplicates', 'I=' + rg_output,
-                        'O=' + dup_output, 'REMOVE_DUPLICATES=true',
-                        'M=' + smpl_name + '.metrics']
+            dup_args = [config['gatk_path'], 'MarkDuplicates', '-I', rg_output,
+                        '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
+                        '-M', smpl_name + '.metrics']
             run(dup_args)
 
         # Realign around indels
+        # Using gatk3 because of this
+        # https://gatkforums.broadinstitute.org/gatk/discussion/11455/realignertargetcreator-and-indelrealigner
         # Preparation: samtools index
         if not check_existence([dup_output + '.bai']):
             click.echo('Indexing %s...' % dup_output)
@@ -345,28 +325,28 @@ def process(platform, library, sample, known_indels, known_snps, reference, samp
         intervals_output = smpl_name + '.intervals'
         if not check_existence([intervals_output]):
             click.echo('Creating indel realignment intervals for %s...' % smpl_name)
-            intervals_args = ['java', '-jar', config['gatk_path'], '-T', 'RealignerTargetCreator', '-R', reference,
+            intervals_args = ['java', '-jar', config['gatk3_path'], '-T', 'RealignerTargetCreator', '-R', reference,
                               '-I', dup_output, '-o', intervals_output, '--known',
                               known_indels]  # only one set of known atm
             run(intervals_args)
         realign_output = '.'.join(dup_output.split('.')[:-1]) + '.RLGN' + smpl_extension
         if not check_existence([realign_output]):
             click.echo('Applying indel realignment based on the intervals for %s...' % smpl_name)
-            realign_args = ['java', '-jar', config['gatk_path'], '-T', 'IndelRealigner', '-R', reference,
+            realign_args = ['java', '-jar', config['gatk3_path'], '-T', 'IndelRealigner', '-R', reference,
                             '-I', dup_output, '-targetIntervals', intervals_output, '-known', known_indels,
                             '-o', realign_output]
             run(realign_args)
 
-        # BQSR --- NOT WORKING!!
+        # BQSR
         table_output = smpl_name + '.table'  # should be the ACTUAL name for the file...
         if not check_existence([table_output]):
             click.echo('Creating base score recalibration table for %s...' % smpl_name)
-            table_args = ['java', '-jar', config['gatk_path'], '-T', 'BaseRecalibrator', '-R', reference,
-                          '-knownSites', known_snps, '-I', realign_output, '-o', table_output]
+            table_args = [config['gatk_path'], 'BaseRecalibrator', '-R', reference,
+                          '--known-sites', known_snps, '-I', realign_output, '-O', table_output]
             run(table_args)
         bqsr_output = '.'.join(realign_output.split('.')[:-1]) + '.BQSR' + smpl_extension
         if not check_existence([bqsr_output]):
             click.echo('Running base score recalibration on %s...' % smpl_name)
-            bqsr_args = ['java', '-jar', config['gatk_path'], '-T', 'PrintReads', '-R', reference,
-                         '-I', realign_output, '--BQSR', table_output, '-o', bqsr_output]
+            bqsr_args = [config['gatk_path'], 'ApplyBQSR',
+                         '-I', realign_output, '-bqsr', table_output, '-O', bqsr_output]
             run(bqsr_args)
