@@ -221,10 +221,10 @@ def call_gatk(name, platform, library, sample, known_snps, clean_up, reference, 
     click.echo('Calling variants on samples %s with GATK-HC...' % ', '.join(sample_list))
     if known_snps is None:
         # each sample needs to be preceed by an -I so this is not working for more than one sample?
-        gatk_args = [config['gatk_path'], 'HaplotypeCaller', '-R', reference, '-I'] + sample_list + \
+        gatk_args = [config['gatk4_path'], 'HaplotypeCaller', '-R', reference, '-I'] + sample_list + \
                     ['-O', name + '.vcf']
     else:
-        gatk_args = [config['gatk_path'], 'HaplotypeCaller', '-R', reference, '-I'] + sample_list + \
+        gatk_args = [config['gatk4_path'], 'HaplotypeCaller', '-R', reference, '-I'] + sample_list + \
                     ['--dbsnp', known_snps, '-O', name + '.vcf']
     run(gatk_args)
 
@@ -296,7 +296,7 @@ def process(platform, library, sample, known_indels, known_snps, reference, samp
         if not check_existence([rg_output]):
             click.echo('Adding Read Group information to %s...' % smpl)
             read_groups = {'ID': smpl_name, 'PL': platform, 'LB': library, 'PU': 'foo', 'SM': sample}
-            rg_args = [config['gatk_path'], 'AddOrReplaceReadGroups', '-I', smpl,
+            rg_args = [config['gatk4_path'], 'AddOrReplaceReadGroups', '-I', smpl,
                        '-O', rg_output, '-RGID', read_groups['ID'], '-RGLB', read_groups['LB'],
                        '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM']]
             run(rg_args)
@@ -309,7 +309,7 @@ def process(platform, library, sample, known_indels, known_snps, reference, samp
         if not check_existence([dup_output]):
             click.echo('Marking and removing duplicates for %s...' % smpl_name)
             # intermediary file
-            dup_args = [config['gatk_path'], 'MarkDuplicates', '-I', rg_output,
+            dup_args = [config['gatk4_path'], 'MarkDuplicates', '-I', rg_output,
                         '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
                         '-M', smpl_name + '.metrics']
             run(dup_args)
@@ -341,12 +341,12 @@ def process(platform, library, sample, known_indels, known_snps, reference, samp
         table_output = smpl_name + '.table'  # should be the ACTUAL name for the file...
         if not check_existence([table_output]):
             click.echo('Creating base score recalibration table for %s...' % smpl_name)
-            table_args = [config['gatk_path'], 'BaseRecalibrator', '-R', reference,
+            table_args = [config['gatk4_path'], 'BaseRecalibrator', '-R', reference,
                           '--known-sites', known_snps, '-I', realign_output, '-O', table_output]
             run(table_args)
         bqsr_output = '.'.join(realign_output.split('.')[:-1]) + '.BQSR' + smpl_extension
         if not check_existence([bqsr_output]):
             click.echo('Running base score recalibration on %s...' % smpl_name)
-            bqsr_args = [config['gatk_path'], 'ApplyBQSR',
+            bqsr_args = [config['gatk4_path'], 'ApplyBQSR',
                          '-I', realign_output, '-bqsr', table_output, '-O', bqsr_output]
             run(bqsr_args)

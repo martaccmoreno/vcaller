@@ -1,4 +1,4 @@
-gatk_path = /home/marta/tools/gatk-4.0.2.1/gatk
+gatk4_path = /home/marta/tools/gatk-4.0.2.1/gatk
 gatk3_path = /home/marta/tools/GenomeAnalysisTK.jar
 picard_path = /home/marta/tools/picard.jar
 working_directory = .
