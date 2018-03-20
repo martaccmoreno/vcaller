@@ -51,7 +51,7 @@ def align():
 
 
 @align.command('bwa')
-@click.option('--name', '-n', default='bwa_out', help='Name of the output file (extension will be added automatically)')
+@click.option('--output', '-o', default='bwa_out.bam', help='Name of the output file.')
 @click.option('--nthreads', '-t', default='1', help='Number of CPU threads to use during the alignment step.')
 @click.option('--check_index', '-i', is_flag=True, help='Check if reference is already indexed, and if yes prompt '
                                                         'the user to skip that step.')
@@ -60,7 +60,7 @@ def align():
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('read1', type=click.Path(exists=True))
 @click.argument('read2', required=False, type=click.Path(exists=True))
-def align_bwa(name, nthreads, check_index, clean_up, reference, read1, read2):
+def align_bwa(output, nthreads, check_index, clean_up, reference, read1, read2):
     """Use the BWA-MEM algorithm for alignment. Requires bwa.
     It is only mandatory to include the reference genome file and a sample read as arguments.
     If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
@@ -82,20 +82,18 @@ def align_bwa(name, nthreads, check_index, clean_up, reference, read1, read2):
     align_args = ['bwa', 'mem', '-M', '-t', nthreads, reference, read1]
     if read2 is not None:
         align_args += read2
-    output_name = name + '.sam'
-    with open(output_name, "w") as align_out:
+    with open('bwa_out.sam', "w") as align_out:
         print(align_args)
         run(align_args, stdout=align_out)
 
     # Sort and convert to BAM
     click.echo('Sorting and converting to BAM...')
-    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', name + '.bam', '-T', '/tmp/lane_temp', output_name]
+    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', name, '-T', '/tmp/lane_temp', 'bwa_out.sam']
     run(sort_args)
 
     # clean up intermediary files
-    if clean_up:
-        click.echo('Cleaning up %s...' % output_name)
-        run(['rm', name + output_name])
+    click.echo('Cleaning up %s...' % 'bwa_out.sam')
+    run(['rm', 'bwa_out.sam'])
 
 
 @align.command('bowtie2')
