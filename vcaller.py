@@ -263,6 +263,14 @@ def process(platform, library, sample, known_indels, known_snps, reference, samp
         smpl_name, smpl_extension = smpl.split('.')
         smpl_extension = '.' + smpl_extension
 
+        # sort and convert SAM extension files to BAM
+        if smpl_extension.lower() == '.sam':
+            click.echo('Sorting and converting %s to BAM...' % smpl)
+            sort_args = ['samtools', 'sort', '-O', 'bam', '-o', smpl_name+'.bam', '-T', '/tmp/lane_temp', smpl]
+            run(sort_args)
+            smpl_extension = '.bam'
+
+
         # read groups
         # only works for 1 library atm
         rg_output = smpl_name + '.RG' + smpl_extension
