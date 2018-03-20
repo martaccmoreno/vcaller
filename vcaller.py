@@ -206,13 +206,12 @@ def call_gatk(output, known_snps, clean_up, reference, sample1, sample2):
 
 
 @call.command('bcftools')
-@click.option('--name', '-n', default='bcftools_out',
+@click.option('--output', '-o', default='bcftools_out.vcf',
               help='Name of the output file (extension will be added automatically)')
-@click.option('--clean-up', '-c', default=False, help='Clean up intermediary files to save disk space.')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_bcftools(name, clean_up, reference, sample1, sample2):
+def call_bcftools(output, reference, sample1, sample2):
     """Call variants using SAMtools's BCFtools.
 
     This command calls variants on input aligned sequence files (samples) after calculating their genotype likelihoods.
@@ -224,8 +223,7 @@ def call_bcftools(name, clean_up, reference, sample1, sample2):
     # PROBLEM: CURRENTLY FINDS MORE VARIANTS THAN IT SHOULD?
 
     sample_list = [sample1] + [s for s in sample2]
-    bcf_output = name + '.bcf'
-    vcf_output = name + '.vcf'
+    bcf_output = 'bcftools_out.bcf'
     # bcftools mpileup
     click.echo('Calculating genotype likelihoods for %s...' % ', '.join(sample_list))
     mpileup_args = ['bcftools', 'mpileup', '-Ob', '-o', bcf_output, '-f', reference] + sample_list
@@ -233,13 +231,12 @@ def call_bcftools(name, clean_up, reference, sample1, sample2):
 
     # variant calling
     click.echo('Calling variants on %s with BCFtools...' % ', '.join(sample_list))
-    call_args = ['bcftools', 'call', '-vcO', 'v', '-o', vcf_output, bcf_output]
+    call_args = ['bcftools', 'call', '-vcO', 'v', '-o', output, bcf_output]
     run(call_args)
 
     # clean up intermediary files
-    if clean_up:
-        click.echo('Cleaning up %s...' % bcf_output)
-        run(['rm', bcf_output])
+    click.echo('Cleaning up %s...' % bcf_output)
+    run(['rm', bcf_output])
 
 
 ##### POST-PROCESSING #####
