@@ -141,11 +141,8 @@ def call():
 
 
 @call.command('gatk')
-@click.option('--name', '-n', default='gatk_out',
+@click.option('--output', '-o', default='gatk_out.vcf',
               help='Name of the output file (extension will be added automatically)')
-@click.option('--platform', '-p', default='ion proton', help='Platform used in sample sequencing.')
-@click.option('--library', '-l', default='library1', help='DNA preparation library identifier.')
-@click.option('--sample', '-s', default='NA12878', help='The name of the sample sequenced in a read group.')
 @click.option('--known-snps', '-k', default=None, type=click.Path(exists=True), help='dbSNP file containing a database \
                                                                                      of known SNPs to help improve \
                                                                                      variant calling results.')
@@ -153,22 +150,19 @@ def call():
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_gatk(name, platform, library, sample, known_snps, clean_up, reference, sample1, sample2):
+def call_gatk(output, known_snps, clean_up, reference, sample1, sample2):
     """Call variants using GATK's HaplotypeCaller.
     The GATK's HaplotypeCaller algorithm is used to call variants on aligned sequence files (samples).
 
+    IMPORTANT NOTES:
+    * Sample sequences must have been previously aligned, so that they are in the BAM format.
+    * IT IS NECESSARY TO PROCESS THE SAMPLE POST-ALIGNMENT, so that it has read group information.
+    *Specifying a dbSNP file with a list of known SNPs is highly recommended.  .
+
     Through the aforementioned algorithm, this command calls variants on input aligned sequence files (samples),
     simplifying the operation thanks to performing all prerequisite processing steps required by GATK to call variants
-    on input files.
-
-    First, it prepares the reference by ensuring that it has been indexed through samtools faidx, and had a dictionary
-    generated through Picard's CreateSequenceDictionary. Then, it prepares the input samples by creating a new file
-    with proper read group (RG) information, and indexing each sample through samtools index. Lastly,
-    GATK-HC is run on these prepared files.
-
-    Specifying a dbSNP file with a list of known SNPs is highly recommended. Only one sample sequence file has to be
-    specified.  Sample sequences must have been previously aligned, so that they are in the SAM/BAM format.
-    A reference genome must be specified.
+    on input files: it ensures that the reference has been indexed through samtools faidx and had a dictionary
+    generated through Picard's CreateSequenceDictionary, then it applies the samtools index command on each sample.
     """
 
     # samtools faidx on REFERENCE
@@ -204,10 +198,10 @@ def call_gatk(name, platform, library, sample, known_snps, clean_up, reference, 
     if known_snps is None:
         # each sample needs to be preceed by an -I so this is not working for more than one sample?
         gatk_args = [config['gatk4_path'], 'HaplotypeCaller', '-R', reference, '-I'] + sample_list + \
-                    ['-O', name + '.vcf']
+                    ['-O', output]
     else:
         gatk_args = [config['gatk4_path'], 'HaplotypeCaller', '-R', reference, '-I'] + sample_list + \
-                    ['--dbsnp', known_snps, '-O', name + '.vcf']
+                    ['--dbsnp', known_snps, '-O', output]
     run(gatk_args)
 
 
