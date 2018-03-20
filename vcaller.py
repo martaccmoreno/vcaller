@@ -53,28 +53,20 @@ def align():
 @align.command('bwa')
 @click.option('--output', '-o', default='bwa_out.bam', help='Name of the output file.')
 @click.option('--nthreads', '-t', default='1', help='Number of CPU threads to use during the alignment step.')
-@click.option('--check_index', '-i', is_flag=True, help='Check if reference is already indexed, and if yes prompt '
-                                                        'the user to skip that step.')
-# CHECK IF POSSIBLE TO HAVE AN OPTION DEFINED FOR MULTIPLE COMMANDS
-@click.option('--clean-up', '-c', default=False, help='Clean up intermediary files to save disk space.')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('read1', type=click.Path(exists=True))
 @click.argument('read2', required=False, type=click.Path(exists=True))
-def align_bwa(output, nthreads, check_index, clean_up, reference, read1, read2):
+def align_bwa(output, nthreads, reference, read1, read2):
     """Use the BWA-MEM algorithm for alignment. Requires bwa.
     It is only mandatory to include the reference genome file and a sample read as arguments.
     If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
 
-    # (FLAG) check_index: check if reference genome is already indexed
-    if check_index:
-        suffix_list = ['.amb', '.ann', '.bwt', '.pac', '.sa']
-        if check_existence([reference + suffix for suffix in suffix_list]):
-            click.echo('Index files already exist!\n Skipping reference genome indexing.')
-        else:
-            click.echo('Need to generate index files!\n Indexing reference genome %s...' % reference)
-            run(['bwa', 'index', reference])
+    # check_index: check if reference genome is already indexed
+    suffix_list = ['.amb', '.ann', '.bwt', '.pac', '.sa']
+    if check_existence([reference + suffix for suffix in suffix_list]):
+        click.echo('Index files already exist!\n Skipping reference genome indexing.')
     else:
-        click.echo('Indexing reference genome %s...' % reference)
+        click.echo('Need to generate index files!\n Indexing reference genome %s...' % reference)
         run(['bwa', 'index', reference])
 
     # Align input sequences to the reference genome
@@ -82,54 +74,47 @@ def align_bwa(output, nthreads, check_index, clean_up, reference, read1, read2):
     align_args = ['bwa', 'mem', '-M', '-t', nthreads, reference, read1]
     if read2 is not None:
         align_args += read2
-    with open('bwa_out.sam', "w") as align_out:
+    sam_output = 'bwa_out.sam'
+    with open(sam_output, "w") as align_out:
         print(align_args)
         run(align_args, stdout=align_out)
 
     # Sort and convert to BAM
     click.echo('Sorting and converting to BAM...')
-    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', name, '-T', '/tmp/lane_temp', 'bwa_out.sam']
+    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', sam_output, '-T', '/tmp/lane_temp', sam_output]
     run(sort_args)
 
     # clean up intermediary files
-    click.echo('Cleaning up %s...' % 'bwa_out.sam')
-    run(['rm', 'bwa_out.sam'])
+    click.echo('Cleaning up %s...' % sam_output)
+    run(['rm', sam_output])
 
 
 @align.command('bowtie2')
-@click.option('--name', '-n', default='bowtie2_out',
+@click.option('--output', '-o', default='bowtie2_out.bam',
               help='Name of the output file (extension will be added automatically)')
-@click.option('--check_index', '-i', is_flag=True, help='Check if reference is already indexed, and if yes prompt '
-                                                        'the user to skip that step.')
-@click.option('--clean-up', '-c', default=False, help='Clean up intermediary files to save disk space.')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('read1', type=click.Path(exists=True))
 @click.argument('read2', required=False, type=click.Path(exists=True))
-def align_bwa(name, check_index, clean_up, reference, read1, read2):
+def align_bwa(output, reference, read1, read2):
     """Use the FM-index tool bowtie2 for alignment. Requires bowtie2.
     It is only mandatory to include the reference genome file and a sample read as arguments.
     If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
 
     ref_basename = reference.split('.')[0]  # bowtie2 uses the reference's basename (no suffix) a lot
-    # (FLAG) check_index: check if reference genome is already indexed
-    if check_index:
-        suffix_list = ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', '.rev.1.bt2', '.rev.2.bt2']
-        if check_existence([ref_basename + suffix for suffix in suffix_list]):
-            click.echo('Index files already exist!\n Skipping reference genome indexing.')
-        else:
-            click.echo('Need to generate index files!\n Indexing reference genome %s...' % reference)
-            # Index the reference genome
-            index_args = [config['bowtie2_path'] + '/bowtie2-build', reference, ref_basename]  # last arg is the
-            # output name
-            run(index_args)
+    # check_index: check if reference genome is already indexed
+    suffix_list = ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', '.rev.1.bt2', '.rev.2.bt2']
+    if check_existence([ref_basename + suffix for suffix in suffix_list]):
+        click.echo('Index files already exist!\n Skipping reference genome indexing.')
     else:
-        click.echo('Indexing reference genome %s...' % reference)
-        index_args = [config['bowtie2_path'] + '/bowtie2-build', reference, ref_basename]
+        click.echo('Need to generate index files!\n Indexing reference genome %s...' % reference)
+        # Index the reference genome
+        index_args = [config['bowtie2_path'] + '/bowtie2-build', reference, ref_basename]  # last arg is the
+        # output name
         run(index_args)
 
     # ADD MULTI-THREAD OPTION -p !!
     # Align the input reads against the reference genome
-    sam_output = name + '.sam'
+    sam_output = 'bowtie2_out.sam'
     if read2 is None:  # if read is single-ended
         align_args = [config['bowtie2_path'] + '/bowtie2', '-x', ref_basename, read1, '-S', sam_output]
         click.echo('Aligning read %s against the reference genome...' % read1)
@@ -141,13 +126,12 @@ def align_bwa(name, check_index, clean_up, reference, read1, read2):
 
     # Sort and convert to BAM
     click.echo('Sorting and converting to BAM...')
-    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', name + '.bam', '-T', '/tmp/lane_temp', sam_output]
+    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', '/tmp/lane_temp', sam_output]
     run(sort_args)
 
     # clean up intermediary files
-    if clean_up:
-        click.echo('Cleaning up %s...' % sam_output)
-        run(['rm', sam_output])
+    click.echo('Cleaning up %s...' % sam_output)
+    run(['rm', sam_output])
 
 
 ##### VARIANT CALLING #####
