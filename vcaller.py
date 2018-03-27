@@ -219,8 +219,6 @@ def call_bcftools(output, reference, sample1, sample2):
     Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
     are in the SAM/BAM format. A reference genome must be provided.
     """
-    # above needs to be adapted for samtools
-    # PROBLEM: CURRENTLY FINDS MORE VARIANTS THAN IT SHOULD?
 
     sample_list = [sample1] + [s for s in sample2]
     bcf_output = 'bcftools_out.bcf'
@@ -231,13 +229,30 @@ def call_bcftools(output, reference, sample1, sample2):
 
     # variant calling
     click.echo('Calling variants on %s with BCFtools...' % ', '.join(sample_list))
-    call_args = ['bcftools', 'call', '-vcO', 'v', '-o', output, bcf_output]
+    call_args = ['bcftools', 'call', '-vmO', 'v', '-o', output, bcf_output]
     run(call_args)
 
     # clean up intermediary files
     click.echo('Cleaning up %s...' % bcf_output)
     run(['rm', bcf_output])
 
+@call.command('tvc')
+@click.option('--output-dir', '-o', default='.',
+              help='Name of output directory; by default save to current directory.')
+@click.argument('reference', type=click.Path(exists=True))
+@click.argument('sample1', type=click.Path(exists=True))
+@click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
+def call_bcftools(output_dir, reference, sample1, sample2):
+    """Call variants using TorrentVariantCaller (TVC).
+
+    Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
+    are in the SAM/BAM format. A reference genome must be provided.
+    """
+
+    sample_list = [sample1] + [s for s in sample2]
+    click.echo('Calling variants on %s with TVC...' % ', '.join(sample_list))
+    call_args = [config['tvc'], '-i', ','.join(sample_list), '-r', reference, '-o', output_dir]
+    run(call_args)
 
 ##### POST-PROCESSING #####
 @cli.command('process', short_help='Prepare reads for variant calling.')
@@ -251,7 +266,7 @@ def call_bcftools(output, reference, sample1, sample2):
 @click.argument('samples', required=True, type=click.Path(exists=True), nargs=-1)
 def process(platform, library, sample, known_indels, known_snps, reference, samples):
     """Performs a group of steps for the post-processing in preparation for variant calling
-    on one or more SAM/BAM sample files. A must do for running the GATK subcommand."""
+    on one or more SAM/BAM sample files. A must do for running the gatk subcommand under call."""
     sample_list = list(samples)
 
     # Create a directory structure to store post-processed files, only if it does not exist yet
@@ -331,3 +346,12 @@ def process(platform, library, sample, known_indels, known_snps, reference, samp
             bqsr_args = [config['gatk4_path'], 'ApplyBQSR',
                          '-I', realign_output, '-bqsr', table_output, '-O', bqsr_output]
             run(bqsr_args)
+
+
+##### FILTERING #####
+@cli.command('filter', short_help='Filter variants in a vcf file.')
+@click.argument('reference', required=True)
+@click.argument('variants', required=True, type=click.Path(exists=True), nargs=-1)
+def process(reference, variants):
+    """Desc"""
+    variant_list = list(variants)
