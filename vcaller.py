@@ -28,7 +28,7 @@ def cli():
     One-stop application that allows the user to leverage several existing bioinformatics tools that constitute variant
     calling pipelines. If desired, the recommended settings for each command can be customized.
     """
-    
+
 
 ##### SEQUENCE ALIGNMENT #####
 
@@ -223,6 +223,7 @@ def call_bcftools(output, reference, sample1, sample2):
     click.echo('Cleaning up %s...' % bcf_output)
     run(['rm', bcf_output])
 
+
 @call.command('tvc')
 @click.option('--output-dir', '-o', default='.',
               help='Name of output directory; by default save to current directory.')
@@ -240,6 +241,7 @@ def call_bcftools(output_dir, reference, sample1, sample2):
     click.echo('Calling variants on %s with TVC...' % ', '.join(sample_list))
     call_args = [config['tvc'], '-i', ','.join(sample_list), '-r', reference, '-o', output_dir]
     run(call_args)
+
 
 ##### POST-PROCESSING #####
 @cli.command('process', short_help='Prepare reads for variant calling.')
@@ -271,10 +273,9 @@ def process(output_dir, platform, library, sample, known_indels, known_snps, ref
         # sort and convert SAM extension files to BAM
         if smpl_extension.lower() == '.sam':
             click.echo('Sorting and converting %s to BAM...' % smpl)
-            sort_args = ['samtools', 'sort', '-O', 'bam', '-o', smpl_name+'.bam', '-T', '/tmp/lane_temp', smpl]
+            sort_args = ['samtools', 'sort', '-O', 'bam', '-o', smpl_name + '.bam', '-T', '/tmp/lane_temp', smpl]
             run(sort_args)
             smpl_extension = '.bam'
-
 
         # read groups
         # only works for 1 library atm
