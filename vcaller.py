@@ -275,7 +275,7 @@ def process(platform, library, sample, known_indels, known_snps, reference, samp
     ##### STORE MORE STUFF IN THE TMP FOLDER
     # Process each sample at a time
     for smpl in sample_list:
-        smpl_name, smpl_extension = smpl.split('.')
+        smpl_name, smpl_extension = smpl.split('.')[:-1], smpl.split('.')[-1]
         smpl_extension = '.' + smpl_extension
 
         # sort and convert SAM extension files to BAM
