@@ -28,20 +28,7 @@ def cli():
     One-stop application that allows the user to leverage several existing bioinformatics tools that constitute variant
     calling pipelines. If desired, the recommended settings for each command can be customized.
     """
-
-
-##### FILE CHECK COMMANDS #####
-@cli.group(short_help="Check file validity.")
-def check():
-    """Tools to check file integrity and whether or not they can be passed to certain commands."""
-
-
-@check.command('quickcheck')
-@click.argument('file', type=click.Path(exists=True))
-def check_quickcheck(file):
-    args = ['samtools', 'quickcheck', '-vvv', file]
-    run(args)
-
+    
 
 ##### SEQUENCE ALIGNMENT #####
 
