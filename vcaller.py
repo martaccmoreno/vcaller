@@ -230,7 +230,7 @@ def call_bcftools(output, reference, sample1, sample2):
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_bcftools(output_dir, reference, sample1, sample2):
+def call_tvc (output_dir, reference, sample1, sample2):
     """Call variants using TorrentVariantCaller (TVC).
 
     Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
@@ -239,7 +239,7 @@ def call_bcftools(output_dir, reference, sample1, sample2):
 
     sample_list = [sample1] + [s for s in sample2]
     click.echo('Calling variants on %s with TVC...' % ', '.join(sample_list))
-    call_args = [config['tvc'], '-i', ','.join(sample_list), '-r', reference, '-o', output_dir]
+    call_args = [config['tvc_path'], '-i', ','.join(sample_list), '-r', reference, '-o', output_dir]
     run(call_args)
 
 
@@ -338,7 +338,7 @@ def process(output_dir, platform, library, sample, known_indels, known_snps, ref
         # clean up intermediary files -- but only after we have the final file
         if check_existence([bqsr_output]):
             click.echo('Cleaning up %s...' % ', '.join([rg_output, dup_output, intervals_output, realign_output,
-                                                        table_output]))
+                                                        table_output, smpl_name + '.metrics']))
             run(['rm', rg_output, dup_output, intervals_output, realign_output, table_output])
 
 

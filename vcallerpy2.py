@@ -240,7 +240,7 @@ def call_bcftools(output, reference, sample1, sample2):
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_bcftools(output_dir, reference, sample1, sample2):
+def call_tvc(output_dir, reference, sample1, sample2):
     """call variants using TorrentVariantcaller (TVC).
 
     Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
@@ -249,7 +249,7 @@ def call_bcftools(output_dir, reference, sample1, sample2):
 
     sample_list = [sample1] + [s for s in sample2]
     click.echo('calling variants on %s with TVC...' % ', '.join(sample_list))
-    call_args = subprocess.Popen([config['tvc'], '-i', ','.join(sample_list), '-r', reference, '-o', output_dir],
+    call_args = subprocess.Popen([config['tvc_path'], '-i', ','.join(sample_list), '-r', reference, '-o', output_dir],
                                  stdout=subprocess.PIPE)
     call_args.communicate()
 
@@ -344,7 +344,7 @@ def process(output_dir, platform, library, sample, known_indels, known_snps, ref
                                            '--known-sites', known_snps, '-I', realign_output, '-O', table_output],
                                           stdout=subprocess.PIPE)
             table_args.communicate()
-        bqsr_output = smpl_name + '.processed' + smpl_extension
+        bqsr_output = output_dir + smpl_name + '.processed' + smpl_extension
         if not check_existence([bqsr_output]):
             click.echo('callning base score recalibration on %s...' % smpl_name)
             bqsr_args = subprocess.Popen([config['gatk4_path'], 'ApplyBQSR',
