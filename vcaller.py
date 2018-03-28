@@ -275,7 +275,7 @@ def process(platform, library, sample, known_indels, known_snps, reference, samp
     ##### STORE MORE STUFF IN THE TMP FOLDER
     # Process each sample at a time
     for smpl in sample_list:
-        smpl_name, smpl_extension = ''.join(smpl.split('.')[:-1]), smpl.split('.')[-1]
+        smpl_name, smpl_extension = '.'.join(smpl.split('.')[:-1]), smpl.split('.')[-1]
         smpl_name = os.path.basename(smpl_name)
         smpl_extension = '.' + smpl_extension
 
