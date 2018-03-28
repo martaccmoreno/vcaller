@@ -340,12 +340,18 @@ def process(platform, library, sample, known_indels, known_snps, reference, samp
             table_args = [config['gatk4_path'], 'BaseRecalibrator', '-R', reference,
                           '--known-sites', known_snps, '-I', realign_output, '-O', table_output]
             run(table_args)
-        bqsr_output = '.'.join(realign_output.split('.')[:-1]) + '.BQSR' + smpl_extension
+        bqsr_output = smpl_name + '.processed' + smpl_extension
         if not check_existence([bqsr_output]):
             click.echo('Running base score recalibration on %s...' % smpl_name)
             bqsr_args = [config['gatk4_path'], 'ApplyBQSR',
                          '-I', realign_output, '-bqsr', table_output, '-O', bqsr_output]
             run(bqsr_args)
+
+        # clean up intermediary files -- but only after we have the final file
+        if check_existence([bqsr_output]):
+            click.echo('Cleaning up %s...' % ', '.join([rg_output, dup_output, intervals_output, realign_output,
+                                                        table_output]))
+            run(['rm', rg_output, dup_output, intervals_output, realign_output, table_output])
 
 
 ##### FILTERING #####
