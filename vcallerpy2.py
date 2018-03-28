@@ -1,6 +1,5 @@
 import os
-from subprocess import call
-
+import subprocess
 import click
 
 ##### IMPORT CONFIG #####
@@ -30,19 +29,6 @@ def cli():
     """
 
 
-##### FILE CHECK COMMANDS #####
-@cli.group(short_help="Check file validity.")
-def check():
-    """Tools to check file integrity and whether or not they can be passed to certain commands."""
-
-
-@check.command('quickcheck')
-@click.argument('file', type=click.Path(exists=True))
-def check_quickcheck(file):
-    args = ['samtools', 'quickcheck', '-vvv', file]
-    call(args)
-
-
 ##### SEQUENCE ALIGNMENT #####
 
 @cli.group(short_help="Align sequences against reference genome.")
@@ -67,26 +53,29 @@ def align_bwa(output, nthreads, reference, read1, read2):
         click.echo('Index files already exist!\n Skipping reference genome indexing.')
     else:
         click.echo('Need to generate index files!\n Indexing reference genome %s...' % reference)
-        call(['bwa', 'index', reference])
+        bwa_index_args = subprocess.Popen(['bwa', 'index', reference], stdout=subprocess.PIPE)
+        subprocess.communicate(bwa_index_args)
 
     # Align input sequences to the reference genome
     click.echo('Aligning read(s) against the reference genome...')  # find way to make message fancier with custom names
-    align_args = ['bwa', 'mem', '-M', '-t', nthreads, reference, read1]
+    align_args = subprocess.Popen(['bwa', 'mem', '-M', '-t', nthreads, reference, read1], stdout=subprocess.PIPE)
     if read2 is not None:
-        align_args += read2
+        align_args = subprocess.Popen(['bwa', 'mem', '-M', '-t', nthreads, reference, read1]+[read2],
+                                      stdout=subprocess.PIPE)
     sam_output = 'bwa_out.sam'
     with open(sam_output, "w") as align_out:
-        print(align_args)
-        call(align_args, stdout=align_out)
+        subprocess.communicate(align_args, stdout=align_out)
 
     # Sort and convert to BAM
     click.echo('Sorting and converting to BAM...')
-    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', sam_output, '-T', '/tmp/lane_temp', sam_output]
-    call(sort_args)
+    sort_args = subprocess.Popen(['samtools', 'sort', '-O', 'bam', '-o', sam_output, '-T', '/tmp/lane_temp',
+                                  sam_output], stdout=subprocess.PIPE)
+    subprocess.communicate(sort_args)
 
     # clean up intermediary files
     click.echo('Cleaning up %s...' % sam_output)
-    call(['rm', sam_output])
+    rm_args = subprocess.Popen(['rm', sam_output], stdout=subprocess.PIPE)
+    subprocess.communicate(rm_args)
 
 
 @align.command('bowtie2')
@@ -108,34 +97,37 @@ def align_bwa(output, reference, read1, read2):
     else:
         click.echo('Need to generate index files!\n Indexing reference genome %s...' % reference)
         # Index the reference genome
-        index_args = [config['bowtie2_path'] + '/bowtie2-build', reference, ref_basename]  # last arg is the
-        # output name
-        call(index_args)
+        index_args = subprocess.Popen([config['bowtie2_path'] + '/bowtie2-build', reference, ref_basename],
+                                      stdout=subprocess.PIPE)
+        subprocess.communicate(index_args)
 
     # ADD MULTI-THREAD OPTION -p !!
     # Align the input reads against the reference genome
     sam_output = 'bowtie2_out.sam'
     if read2 is None:  # if read is single-ended
-        align_args = [config['bowtie2_path'] + '/bowtie2', '-x', ref_basename, read1, '-S', sam_output]
+        align_args = subprocess.Popen([config['bowtie2_path'] + '/bowtie2', '-x', ref_basename, read1, '-S',
+                                       sam_output], stdout=subprocess.PIPE)
         click.echo('Aligning read %s against the reference genome...' % read1)
     else:  # if paired_end
-        align_args = [config['bowtie2_path'] + '/bowtie2', '-x', ref_basename,
-                      '-1', read1, '-2', read2, '-S', sam_output]
+        align_args = subprocess.Popen([config['bowtie2_path'] + '/bowtie2', '-x', ref_basename,
+                      '-1', read1, '-2', read2, '-S', sam_output], stdout=subprocess.PIPE)
         click.echo('Aligning reads %s %s against the reference genome...' % (read1, read2))
-    call(align_args)
+    subprocess.communicate(align_args)
 
     # Sort and convert to BAM
     click.echo('Sorting and converting to BAM...')
-    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', '/tmp/lane_temp', sam_output]
-    call(sort_args)
+    sort_args = subprocess.Popen(['samtools', 'sort', '-O', 'bam', '-o', output, '-T', '/tmp/lane_temp', sam_output],
+                                 stdout=subprocess.PIPE)
+    subprocess.communicate(sort_args)
 
     # clean up intermediary files
     click.echo('Cleaning up %s...' % sam_output)
-    call(['rm', sam_output])
+    rm_args = subprocess.Popen(['rm', sam_output], stdout=subprocess.PIPE)
+    subprocess.communicate(rm_args)
 
 
-##### VARIANT CALLING #####
-@cli.group(short_help='Call variants on mapped sequences.')
+##### VARIANT callING #####
+@cli.group(short_help='call variants on mapped sequences.')
 def call():
     """Set of tools to call variants on files containing sequences previously aligned to a reference genome."""
 
@@ -151,8 +143,8 @@ def call():
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
 def call_gatk(output, known_snps, clean_up, reference, sample1, sample2):
-    """Call variants using GATK's HaplotypeCaller.
-    The GATK's HaplotypeCaller algorithm is used to call variants on aligned sequence files (samples).
+    """call variants using GATK's Haplotypecaller.
+    The GATK's Haplotypecaller algorithm is used to call variants on aligned sequence files (samples).
 
     IMPORTANT NOTES:
     * Sample sequences must have been previously aligned, so that they are in the BAM format.
@@ -170,8 +162,8 @@ def call_gatk(output, known_snps, clean_up, reference, sample1, sample2):
         click.echo('Reference faidx index file already exists!\nSkipping faidx indexing.')
     else:
         click.echo('Indexing reference file %s...' % reference)
-        faidx_args = ['samtools', 'faidx', reference]
-        call(faidx_args)
+        faidx_args = subprocess.Popen(['samtools', 'faidx', reference], stdout=subprocess.PIPE)
+        subprocess.communicate(faidx_args)
 
     # generate .dict dictionary file for REFERENCE
     dict_file = reference.split('.')[0] + '.dict'
@@ -180,9 +172,9 @@ def call_gatk(output, known_snps, clean_up, reference, sample1, sample2):
             'Dictionary file %s already exists.\nSkipping reference genome dictionary file generation.' % dict_file)
     else:
         click.echo('Generating reference genome dictionary %s...' % dict_file)
-        dict_vars = ['java', '-jar', config['picard_path'], 'CreateSequenceDictionary', 'R=%s' % reference,
-                     'O=%s' % dict_file]
-        call(dict_vars)
+        dict_vars = subprocess.Popen(['java', '-jar', config['picard_path'], 'CreateSequenceDictionary', 'R=%s' % reference,
+                     'O=%s' % dict_file], stdout=subprocess.PIPE)
+        subprocess.communicate(dict_vars)
 
     sample_list = [sample1] + [s for s in sample2]
     # samtools index on each SAMPLE
@@ -190,19 +182,19 @@ def call_gatk(output, known_snps, clean_up, reference, sample1, sample2):
         click.echo('Sample index .bai files already exist!\nSkipping sample indexing.')
     else:
         click.echo('Need to generate sample index .bai files!\nIndexing sample files %s...' % ', '.join(sample_list))
-        index_args = ['samtools', 'index'] + sample_list
-        call(index_args)
+        index_args = subprocess.Popen(['samtools', 'index'] + sample_list, stdout=subprocess.PIPE)
+        subprocess.communicate(index_args)
 
     # call GATK-HC
-    click.echo('Calling variants on samples %s with GATK-HC...' % ', '.join(sample_list))
+    click.echo('calling variants on samples %s with GATK-HC...' % ', '.join(sample_list))
     if known_snps is None:
         # each sample needs to be preceed by an -I so this is not working for more than one sample?
-        gatk_args = [config['gatk4_path'], 'HaplotypeCaller', '-R', reference, '-I'] + sample_list + \
-                    ['-O', output]
+        gatk_args = subprocess.Popen([config['gatk4_path'], 'Haplotypecaller', '-R', reference, '-I'] + sample_list + \
+                    ['-O', output], stdout=subprocess.PIPE)
     else:
-        gatk_args = [config['gatk4_path'], 'HaplotypeCaller', '-R', reference, '-I'] + sample_list + \
-                    ['--dbsnp', known_snps, '-O', output]
-    call(gatk_args)
+        gatk_args = subprocess.Popen([config['gatk4_path'], 'Haplotypecaller', '-R', reference, '-I'] + sample_list + \
+                    ['--dbsnp', known_snps, '-O', output], stdout=subprocess.PIPE)
+    subprocess.communicate(gatk_args)
 
 
 @call.command('bcftools')
@@ -212,7 +204,7 @@ def call_gatk(output, known_snps, clean_up, reference, sample1, sample2):
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
 def call_bcftools(output, reference, sample1, sample2):
-    """Call variants using SAMtools's BCFtools.
+    """call variants using SAMtools's BCFtools.
 
     This command calls variants on input aligned sequence files (samples) after calculating their genotype likelihoods.
 
@@ -224,17 +216,19 @@ def call_bcftools(output, reference, sample1, sample2):
     bcf_output = 'bcftools_out.bcf'
     # bcftools mpileup
     click.echo('Calculating genotype likelihoods for %s...' % ', '.join(sample_list))
-    mpileup_args = ['bcftools', 'mpileup', '-Ob', '-o', bcf_output, '-f', reference] + sample_list
-    call(mpileup_args)
+    mpileup_args = subprocess.Popen(['bcftools', 'mpileup', '-Ob', '-o', bcf_output, '-f', reference] + sample_list,
+                                    stdout=subprocess.PIPE)
+    subprocess.communicate(mpileup_args)
 
     # variant calling
-    click.echo('Calling variants on %s with BCFtools...' % ', '.join(sample_list))
-    call_args = ['bcftools', 'call', '-vmO', 'v', '-o', output, bcf_output]
-    call(call_args)
+    click.echo('calling variants on %s with BCFtools...' % ', '.join(sample_list))
+    call_args = subprocess.Popen(['bcftools', 'call', '-vmO', 'v', '-o', output, bcf_output], stdout=subprocess.PIPE)
+    subprocess.communicate(call_args)
 
     # clean up intermediary files
     click.echo('Cleaning up %s...' % bcf_output)
-    call(['rm', bcf_output])
+    rm_args = subprocess.Popen(['rm', bcf_output], stdout=subprocess.PIPE)
+    subprocess.communicate(rm_args)
 
 @call.command('tvc')
 @click.option('--output-dir', '-o', default='.',
@@ -243,19 +237,22 @@ def call_bcftools(output, reference, sample1, sample2):
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
 def call_bcftools(output_dir, reference, sample1, sample2):
-    """Call variants using TorrentVariantCaller (TVC).
+    """call variants using TorrentVariantcaller (TVC).
 
     Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
     are in the SAM/BAM format. A reference genome must be provided.
     """
 
     sample_list = [sample1] + [s for s in sample2]
-    click.echo('Calling variants on %s with TVC...' % ', '.join(sample_list))
-    call_args = [config['tvc'], '-i', ','.join(sample_list), '-r', reference, '-o', output_dir]
-    call(call_args)
+    click.echo('calling variants on %s with TVC...' % ', '.join(sample_list))
+    call_args = subprocess.Popen([config['tvc'], '-i', ','.join(sample_list), '-r', reference, '-o', output_dir],
+                                 stdout=subprocess.PIPE)
+    subprocess.communicate(call_args)
 
 ##### POST-PROCESSING #####
 @cli.command('process', short_help='Prepare reads for variant calling.')
+@click.option('--output-dir', '-o', default='',
+              help='Name of output directory; by default save to current directory.')
 @click.option('--platform', '-p', default='IONTORRENT', help='Platform used in sample sequencing.')
 @click.option('--library', '-l', default='library1', help='DNA preparation library identifier.')
 @click.option('--sample', '-s', default='NA12878', help='The name of the sample sequenced in a read group.')
@@ -264,13 +261,13 @@ def call_bcftools(output_dir, reference, sample1, sample2):
 @click.argument('known-snps', required=True)
 @click.argument('reference', required=True)
 @click.argument('samples', required=True, type=click.Path(exists=True), nargs=-1)
-def process(platform, library, sample, known_indels, known_snps, reference, samples):
+def process(output_dir, platform, library, sample, known_indels, known_snps, reference, samples):
     """Performs a group of steps for the post-processing in preparation for variant calling
     on one or more SAM/BAM sample files. A must do for callning the gatk subcommand under call."""
     sample_list = list(samples)
 
     # Create a directory structure to store post-processed files, only if it does not exist yet
-    # call(['mkdir', '-p', 'post-processing-tmp'])
+    # subprocess.communicate(['mkdir', '-p', 'post-processing-tmp'])
 
     ##### STORE MORE STUFF IN THE TMP FOLDER
     # Process each sample at a time
@@ -282,31 +279,33 @@ def process(platform, library, sample, known_indels, known_snps, reference, samp
         # sort and convert SAM extension files to BAM
         if smpl_extension.lower() == '.sam':
             click.echo('Sorting and converting %s to BAM...' % smpl)
-            sort_args = ['samtools', 'sort', '-O', 'bam', '-o', smpl_name+'.bam', '-T', '/tmp/lane_temp', smpl]
-            call(sort_args)
+            sort_args = subprocess.Popen(['samtools', 'sort', '-O', 'bam', '-o', smpl_name+'.bam', '-T',
+                                          '/tmp/lane_temp', smpl], stdout=subprocess.PIPE)
+            subprocess.communicate(sort_args)
             smpl_extension = '.bam'
 
 
         # read groups
         # only works for 1 library atm
-        rg_output = smpl_name + '.RG' + smpl_extension
+        rg_output = output_dir + smpl_name + '.RG' + smpl_extension
         if not check_existence([rg_output]):
             click.echo('Adding Read Group information to %s...' % smpl)
             read_groups = {'ID': smpl_name, 'PL': platform, 'LB': library, 'PU': 'foo', 'SM': sample}
-            rg_args = [config['gatk4_path'], 'AddOrReplaceReadGroups', '-I', smpl,
+            rg_args = subprocess.Popen([config['gatk4_path'], 'AddOrReplaceReadGroups', '-I', smpl,
                        '-O', rg_output, '-RGID', read_groups['ID'], '-RGLB', read_groups['LB'],
-                       '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM']]
-            call(rg_args)
+                       '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM']],
+                                       stdout=subprocess.PIPE)
+            subprocess.communicate(rg_args)
 
         # Mark and remove duplicates (make it an option to not remove, only marking?)
         dup_output = '.'.join(rg_output.split('.')[:-1]) + '.DUP' + smpl_extension
         if not check_existence([dup_output]):
             click.echo('Marking and removing duplicates for %s...' % smpl_name)
             # intermediary file
-            dup_args = [config['gatk4_path'], 'MarkDuplicates', '-I', rg_output,
+            dup_args = subprocess.Popen([config['gatk4_path'], 'MarkDuplicates', '-I', rg_output,
                         '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
-                        '-M', smpl_name + '.metrics']
-            call(dup_args)
+                        '-M', smpl_name + '.metrics'], stdout=subprocess.PIPE)
+            subprocess.communicate(dup_args)
 
         # Realign around indels
         # Using gatk3 because of this
@@ -314,42 +313,45 @@ def process(platform, library, sample, known_indels, known_snps, reference, samp
         # Preparation: samtools index
         if not check_existence([dup_output + '.bai']):
             click.echo('Indexing %s...' % dup_output)
-            call(['samtools', 'index', dup_output])
+            dup_index_args = subprocess.Popen(['samtools', 'index', dup_output], stdout=subprocess.PIPE)
+            subprocess.communicate(dup_index_args)
         # Known indels HAVE to be indexed... how to ensure?
         intervals_output = smpl_name + '.intervals'
         if not check_existence([intervals_output]):
             click.echo('Creating indel realignment intervals for %s...' % smpl_name)
-            intervals_args = ['java', '-jar', config['gatk3_path'], '-T', 'RealignerTargetCreator', '-R', reference,
-                              '-I', dup_output, '-o', intervals_output, '--known',
-                              known_indels]  # only one set of known atm
-            call(intervals_args)
+            intervals_args = subprocess.Popen(['java', '-jar', config['gatk3_path'], '-T', 'RealignerTargetCreator',
+                                               '-R', reference, '-I', dup_output, '-o', intervals_output, '--known',
+                              known_indels], stdout=subprocess.PIPE) # only one set of known atm
+            subprocess.communicate(intervals_args)
         realign_output = '.'.join(dup_output.split('.')[:-1]) + '.RLGN' + smpl_extension
         if not check_existence([realign_output]):
             click.echo('Applying indel realignment based on the intervals for %s...' % smpl_name)
-            realign_args = ['java', '-jar', config['gatk3_path'], '-T', 'IndelRealigner', '-R', reference,
-                            '-I', dup_output, '-targetIntervals', intervals_output, '-known', known_indels,
-                            '-o', realign_output]
-            call(realign_args)
+            realign_args = subprocess.Popen(['java', '-jar', config['gatk3_path'], '-T', 'IndelRealigner',
+                                             '-R', reference, '-I', dup_output, '-targetIntervals', intervals_output,
+                                             '-known', known_indels, '-o', realign_output], stdout=subprocess.PIPE)
+            subprocess.communicate(realign_args)
 
         # BQSR
         table_output = smpl_name + '.table'  # should be the ACTUAL name for the file...
         if not check_existence([table_output]):
             click.echo('Creating base score recalibration table for %s...' % smpl_name)
-            table_args = [config['gatk4_path'], 'BaseRecalibrator', '-R', reference,
-                          '--known-sites', known_snps, '-I', realign_output, '-O', table_output]
-            call(table_args)
+            table_args = subprocess.Popen([config['gatk4_path'], 'BaseRecalibrator', '-R', reference,
+                          '--known-sites', known_snps, '-I', realign_output, '-O', table_output], stdout=subprocess.PIPE)
+            subprocess.communicate(table_args)
         bqsr_output = smpl_name + '.processed' + smpl_extension
         if not check_existence([bqsr_output]):
             click.echo('callning base score recalibration on %s...' % smpl_name)
-            bqsr_args = [config['gatk4_path'], 'ApplyBQSR',
-                         '-I', realign_output, '-bqsr', table_output, '-O', bqsr_output]
-            call(bqsr_args)
+            bqsr_args = subprocess.Popen([config['gatk4_path'], 'ApplyBQSR',
+                         '-I', realign_output, '-bqsr', table_output, '-O', bqsr_output], stdout=subprocess.PIPE)
+            subprocess.communicate(bqsr_args)
 
         # clean up intermediary files -- but only after we have the final file
         if check_existence([bqsr_output]):
             click.echo('Cleaning up %s...' % ', '.join([rg_output, dup_output, intervals_output, realign_output,
                                                         table_output]))
-            call(['rm', rg_output, dup_output, intervals_output, realign_output, table_output])
+            rm_args = subprocess.Popen(['rm', rg_output, dup_output, intervals_output, realign_output, table_output],
+                                       stdout=subprocess.PIPE)
+            subprocess.communicate(rm_args)
 
 
 ##### FILTERING #####

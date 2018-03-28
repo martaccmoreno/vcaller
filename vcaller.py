@@ -256,6 +256,8 @@ def call_bcftools(output_dir, reference, sample1, sample2):
 
 ##### POST-PROCESSING #####
 @cli.command('process', short_help='Prepare reads for variant calling.')
+@click.option('--output-dir', '-o', default='',
+              help='Name of output directory; by default save to current directory.')
 @click.option('--platform', '-p', default='IONTORRENT', help='Platform used in sample sequencing.')
 @click.option('--library', '-l', default='library1', help='DNA preparation library identifier.')
 @click.option('--sample', '-s', default='NA12878', help='The name of the sample sequenced in a read group.')
@@ -264,7 +266,7 @@ def call_bcftools(output_dir, reference, sample1, sample2):
 @click.argument('known-snps', required=True)
 @click.argument('reference', required=True)
 @click.argument('samples', required=True, type=click.Path(exists=True), nargs=-1)
-def process(platform, library, sample, known_indels, known_snps, reference, samples):
+def process(output_dir, platform, library, sample, known_indels, known_snps, reference, samples):
     """Performs a group of steps for the post-processing in preparation for variant calling
     on one or more SAM/BAM sample files. A must do for running the gatk subcommand under call."""
     sample_list = list(samples)
@@ -289,7 +291,7 @@ def process(platform, library, sample, known_indels, known_snps, reference, samp
 
         # read groups
         # only works for 1 library atm
-        rg_output = smpl_name + '.RG' + smpl_extension
+        rg_output = output_dir + smpl_name + '.RG' + smpl_extension
         if not check_existence([rg_output]):
             click.echo('Adding Read Group information to %s...' % smpl)
             read_groups = {'ID': smpl_name, 'PL': platform, 'LB': library, 'PU': 'foo', 'SM': sample}
@@ -338,7 +340,7 @@ def process(platform, library, sample, known_indels, known_snps, reference, samp
             table_args = [config['gatk4_path'], 'BaseRecalibrator', '-R', reference,
                           '--known-sites', known_snps, '-I', realign_output, '-O', table_output]
             run(table_args)
-        bqsr_output = smpl_name + '.processed' + smpl_extension
+        bqsr_output = output_dir + smpl_name + '.processed' + smpl_extension
         if not check_existence([bqsr_output]):
             click.echo('Running base score recalibration on %s...' % smpl_name)
             bqsr_args = [config['gatk4_path'], 'ApplyBQSR',
