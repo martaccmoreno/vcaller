@@ -275,6 +275,7 @@ def process(platform, library, sample, known_indels, known_snps, reference, samp
     ##### STORE MORE STUFF IN THE TMP FOLDER
     # Process each sample at a time
     for smpl in sample_list:
+        smpl = os.path.basename(smpl)
         smpl_name, smpl_extension = ''.join(smpl.split('.')[:-1]), smpl.split('.')[-1]
         smpl_extension = '.' + smpl_extension
 
@@ -296,9 +297,6 @@ def process(platform, library, sample, known_indels, known_snps, reference, samp
                        '-O', rg_output, '-RGID', read_groups['ID'], '-RGLB', read_groups['LB'],
                        '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM']]
             call(rg_args)
-        # NOTE: "ERROR MESSAGE: The platform (ion proton) associated with read group GATKSAMReadGroupRecord
-        # @RG:bowtie2_out is not a recognized platform. Allowable options are ILLUMINA,SLX,SOLEXA,SOLID,454,LS454,
-        # COMPLETE,PACBIO,IONTORRENT,CAPILLARY,HELICOS,UNKNOWN
 
         # Mark and remove duplicates (make it an option to not remove, only marking?)
         dup_output = '.'.join(rg_output.split('.')[:-1]) + '.DUP' + smpl_extension
