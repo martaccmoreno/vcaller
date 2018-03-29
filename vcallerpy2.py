@@ -224,7 +224,7 @@ def call_bcftools(output, reference, sample1, sample2):
     mpileup_args.communicate()
 
     # variant calling
-    click.echo('calling variants on %s with BCFtools...' % ', '.join(sample_list))
+    click.echo('Calling variants on %s with BCFtools...' % ', '.join(sample_list))
     call_args = subprocess.Popen(['bcftools', 'call', '-vmO', 'v', '-o', output, bcf_output], stdout=subprocess.PIPE)
     call_args.communicate()
 
@@ -248,7 +248,7 @@ def call_tvc(output_dir, reference, sample1, sample2):
     """
 
     sample_list = [sample1] + [s for s in sample2]
-    click.echo('calling variants on %s with TVC...' % ', '.join(sample_list))
+    click.echo('Calling variants on %s with TVC...' % ', '.join(sample_list))
     call_args = subprocess.Popen([config['tvc_path'], '-i', ','.join(sample_list), '-r', reference, '-o', output_dir],
                                  stdout=subprocess.PIPE)
     call_args.communicate()

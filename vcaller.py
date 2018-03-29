@@ -247,99 +247,89 @@ def call_tvc (output_dir, reference, sample1, sample2):
 @cli.command('process', short_help='Prepare reads for variant calling.')
 @click.option('--output-dir', '-o', default='',
               help='Name of output directory; by default save to current directory.')
-@click.option('--platform', '-p', default='IONTORRENT', help='Platform used in sample sequencing.')
-@click.option('--library', '-l', default='library1', help='DNA preparation library identifier.')
-@click.option('--sample', '-s', default='NA12878', help='The name of the sample sequenced in a read group.')
 # Try to make these 2 options, to see if it's possible to give more than 1 set
-@click.argument('known-indels', required=True)
-@click.argument('known-snps', required=True)
-@click.argument('reference', required=True)
-@click.argument('samples', required=True, type=click.Path(exists=True), nargs=-1)
+@click.argument('known-indels', required=True, type=click.Path(exists=True))
+@click.argument('known-snps', required=True, type=click.Path(exists=True))
+@click.argument('reference', required=True, type=click.Path(exists=True))
+@click.argument('sample', required=True, type=click.Path(exists=True))
 def process(output_dir, platform, library, sample, known_indels, known_snps, reference, samples):
     """Performs a group of steps for the post-processing in preparation for variant calling
-    on one or more SAM/BAM sample files. A must do for running the gatk subcommand under call."""
-    sample_list = list(samples)
+    on one SAM/BAM sampl file. A must do for running the gatk subcommand under call."""
 
-    # Create a directory structure to store post-processed files, only if it does not exist yet
-    # run(['mkdir', '-p', 'post-processing-tmp'])
+    smpl_name, smpl_extension = '.'.join(sample.split('.')[:-1]), sample.split('.')[-1]
+    smpl_name = os.path.basename(smpl_name)
+    smpl_extension = '.' + smpl_extension
 
-    ##### STORE MORE STUFF IN THE TMP FOLDER
-    # Process each sample at a time
-    for smpl in sample_list:
-        smpl_name, smpl_extension = '.'.join(smpl.split('.')[:-1]), smpl.split('.')[-1]
-        smpl_name = os.path.basename(smpl_name)
-        smpl_extension = '.' + smpl_extension
+    # sort and convert SAM extension files to BAM
+    if smpl_extension.lower() == '.sam':
+        click.echo('Sorting and converting %s to BAM...' % sample)
+        sort_args = ['samtools', 'sort', '-O', 'bam', '-o', smpl_name + '.bam', '-T', '/tmp/lane_temp', smpl]
+        run(sort_args)
+        smpl_extension = '.bam'
 
-        # sort and convert SAM extension files to BAM
-        if smpl_extension.lower() == '.sam':
-            click.echo('Sorting and converting %s to BAM...' % smpl)
-            sort_args = ['samtools', 'sort', '-O', 'bam', '-o', smpl_name + '.bam', '-T', '/tmp/lane_temp', smpl]
-            run(sort_args)
-            smpl_extension = '.bam'
+    # read groups -- this step should be optional (flag --add-read-groups -rg with the info in a formatted string)
+    # only works for 1 library atm
+    rg_output = output_dir + smpl_name + '.RG' + smpl_extension
+    if not check_existence([rg_output]):
+        click.echo('Adding Read Group information to %s...' % sample)
+        read_groups = {'ID': smpl_name, 'PL': platform, 'LB': library, 'PU': 'foo', 'SM': sample}
+        rg_args = [config['gatk4_path'], 'AddOrReplaceReadGroups', '-I', sample,
+                   '-O', rg_output, '-RGID', read_groups['ID'], '-RGLB', read_groups['LB'],
+                   '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM']]
+        run(rg_args)
 
-        # read groups
-        # only works for 1 library atm
-        rg_output = output_dir + smpl_name + '.RG' + smpl_extension
-        if not check_existence([rg_output]):
-            click.echo('Adding Read Group information to %s...' % smpl)
-            read_groups = {'ID': smpl_name, 'PL': platform, 'LB': library, 'PU': 'foo', 'SM': sample}
-            rg_args = [config['gatk4_path'], 'AddOrReplaceReadGroups', '-I', smpl,
-                       '-O', rg_output, '-RGID', read_groups['ID'], '-RGLB', read_groups['LB'],
-                       '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM']]
-            run(rg_args)
+    # Mark and remove duplicates (make it an option to not remove, only marking?)
+    dup_output = '.'.join(rg_output.split('.')[:-1]) + '.DUP' + smpl_extension
+    if not check_existence([dup_output]):
+        click.echo('Marking and removing duplicates for %s...' % smpl_name)
+        # intermediary file
+        dup_args = [config['gatk4_path'], 'MarkDuplicates', '-I', rg_output,
+                    '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
+                    '-M', smpl_name + '.metrics']
+        run(dup_args)
 
-        # Mark and remove duplicates (make it an option to not remove, only marking?)
-        dup_output = '.'.join(rg_output.split('.')[:-1]) + '.DUP' + smpl_extension
-        if not check_existence([dup_output]):
-            click.echo('Marking and removing duplicates for %s...' % smpl_name)
-            # intermediary file
-            dup_args = [config['gatk4_path'], 'MarkDuplicates', '-I', rg_output,
-                        '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
-                        '-M', smpl_name + '.metrics']
-            run(dup_args)
+    # Realign around indels
+    # Using gatk3 because of this
+    # https://gatkforums.broadinstitute.org/gatk/discussion/11455/realignertargetcreator-and-indelrealigner
+    # Preparation: samtools index
+    if not check_existence([dup_output + '.bai']):
+        click.echo('Indexing %s...' % dup_output)
+        run(['samtools', 'index', dup_output])
+    # Known indels HAVE to be indexed... how to ensure?
+    intervals_output = smpl_name + '.intervals'
+    if not check_existence([intervals_output]):
+        click.echo('Creating indel realignment intervals for %s...' % smpl_name)
+        intervals_args = ['java', '-jar', config['gatk3_path'], '-T', 'RealignerTargetCreator', '-R', reference,
+                          '-I', dup_output, '-o', intervals_output, '--known',
+                          known_indels]  # only one set of known atm
+        run(intervals_args)
+    realign_output = '.'.join(dup_output.split('.')[:-1]) + '.RLGN' + smpl_extension
+    if not check_existence([realign_output]):
+        click.echo('Applying indel realignment based on the intervals for %s...' % smpl_name)
+        realign_args = ['java', '-jar', config['gatk3_path'], '-T', 'IndelRealigner', '-R', reference,
+                        '-I', dup_output, '-targetIntervals', intervals_output, '-known', known_indels,
+                        '-o', realign_output]
+        run(realign_args)
 
-        # Realign around indels
-        # Using gatk3 because of this
-        # https://gatkforums.broadinstitute.org/gatk/discussion/11455/realignertargetcreator-and-indelrealigner
-        # Preparation: samtools index
-        if not check_existence([dup_output + '.bai']):
-            click.echo('Indexing %s...' % dup_output)
-            run(['samtools', 'index', dup_output])
-        # Known indels HAVE to be indexed... how to ensure?
-        intervals_output = smpl_name + '.intervals'
-        if not check_existence([intervals_output]):
-            click.echo('Creating indel realignment intervals for %s...' % smpl_name)
-            intervals_args = ['java', '-jar', config['gatk3_path'], '-T', 'RealignerTargetCreator', '-R', reference,
-                              '-I', dup_output, '-o', intervals_output, '--known',
-                              known_indels]  # only one set of known atm
-            run(intervals_args)
-        realign_output = '.'.join(dup_output.split('.')[:-1]) + '.RLGN' + smpl_extension
-        if not check_existence([realign_output]):
-            click.echo('Applying indel realignment based on the intervals for %s...' % smpl_name)
-            realign_args = ['java', '-jar', config['gatk3_path'], '-T', 'IndelRealigner', '-R', reference,
-                            '-I', dup_output, '-targetIntervals', intervals_output, '-known', known_indels,
-                            '-o', realign_output]
-            run(realign_args)
+    # BQSR
+    table_output = smpl_name + '.table'  # should be the ACTUAL name for the file...
+    if not check_existence([table_output]):
+        click.echo('Creating base score recalibration table for %s...' % smpl_name)
+        table_args = [config['gatk4_path'], 'BaseRecalibrator', '-R', reference,
+                      '--known-sites', known_snps, '-I', realign_output, '-O', table_output]
+        run(table_args)
+    bqsr_output = output_dir + smpl_name + '.processed' + smpl_extension
+    if not check_existence([bqsr_output]):
+        click.echo('Running base score recalibration on %s...' % smpl_name)
+        bqsr_args = [config['gatk4_path'], 'ApplyBQSR',
+                     '-I', realign_output, '-bqsr', table_output, '-O', bqsr_output]
+        run(bqsr_args)
 
-        # BQSR
-        table_output = smpl_name + '.table'  # should be the ACTUAL name for the file...
-        if not check_existence([table_output]):
-            click.echo('Creating base score recalibration table for %s...' % smpl_name)
-            table_args = [config['gatk4_path'], 'BaseRecalibrator', '-R', reference,
-                          '--known-sites', known_snps, '-I', realign_output, '-O', table_output]
-            run(table_args)
-        bqsr_output = output_dir + smpl_name + '.processed' + smpl_extension
-        if not check_existence([bqsr_output]):
-            click.echo('Running base score recalibration on %s...' % smpl_name)
-            bqsr_args = [config['gatk4_path'], 'ApplyBQSR',
-                         '-I', realign_output, '-bqsr', table_output, '-O', bqsr_output]
-            run(bqsr_args)
-
-        # clean up intermediary files -- but only after we have the final file
-        if check_existence([bqsr_output]):
-            click.echo('Cleaning up %s...' % ', '.join([rg_output, dup_output, intervals_output, realign_output,
-                                                        table_output, smpl_name + '.metrics']))
-            run(['rm', rg_output, dup_output, intervals_output, realign_output, table_output])
+    # clean up intermediary files -- but only after we have the final file
+    if check_existence([bqsr_output]):
+        click.echo('Cleaning up %s...' % ', '.join([rg_output, dup_output, intervals_output, realign_output,
+                                                    table_output, smpl_name + '.metrics']))
+        run(['rm', rg_output, dup_output, intervals_output, realign_output, table_output])
 
 
 ##### FILTERING #####
