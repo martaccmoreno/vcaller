@@ -247,12 +247,16 @@ def call_tvc (output_dir, reference, sample1, sample2):
 @cli.command('process', short_help='Prepare reads for variant calling.')
 @click.option('--output-dir', '-o', default='',
               help='Name of output directory; by default save to current directory.')
+@click.option('--readgroup-info', default=None, type=str, help='Add read group information  to the sample, which MUST '
+                                                               'follow the format below:\n'
+                                                               r'\tID:identifier\tPU:platform_unit' '\n'
+                                                               r'\tPL:platform\tSM:sample\tLB:library' '\n')
 # Try to make these 2 options, to see if it's possible to give more than 1 set
 @click.argument('known-indels', required=True, type=click.Path(exists=True))
 @click.argument('known-snps', required=True, type=click.Path(exists=True))
 @click.argument('reference', required=True, type=click.Path(exists=True))
 @click.argument('sample', required=True, type=click.Path(exists=True))
-def process(output_dir, platform, library, sample, known_indels, known_snps, reference, samples):
+def process(output_dir, readgroup_info, known_indels, known_snps, reference, sample):
     """Performs a group of steps for the post-processing in preparation for variant calling
     on one SAM/BAM sampl file. A must do for running the gatk subcommand under call."""
 
@@ -267,25 +271,34 @@ def process(output_dir, platform, library, sample, known_indels, known_snps, ref
         run(sort_args)
         smpl_extension = '.bam'
 
-    # read groups -- this step should be optional (flag --add-read-groups -rg with the info in a formatted string)
-    # only works for 1 library atm
-    rg_output = output_dir + smpl_name + '.RG' + smpl_extension
-    if not check_existence([rg_output]):
-        click.echo('Adding Read Group information to %s...' % sample)
-        read_groups = {'ID': smpl_name, 'PL': platform, 'LB': library, 'PU': 'foo', 'SM': sample}
-        rg_args = [config['gatk4_path'], 'AddOrReplaceReadGroups', '-I', sample,
-                   '-O', rg_output, '-RGID', read_groups['ID'], '-RGLB', read_groups['LB'],
-                   '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM']]
-        run(rg_args)
+    # More info on RGs: https://gatkforums.broadinstitute.org/gatk/discussion/6472/read-groups
+    if readgroup_info is not None:
+        rg_output = output_dir + smpl_name + '.RG' + smpl_extension
+        if not check_existence([rg_output]):
+            click.echo('Adding Read Group information to %s...' % sample)
+            rg_info = readgroup_info.split(r'\t')
+            click.echo(rg_info)
+            read_groups = {'ID': rg_info[0].split(':')[1], 'PU': rg_info[1].split(':')[1],
+                           'PL': rg_info[2].split(':')[1], 'SM': rg_info[3].split(':')[1],
+                           'LB': rg_info[4].split(':')[1]}
+            click.echo(read_groups)
+            rg_args = [config['gatk4_path'], 'AddOrReplaceReadGroups', '-I', sample,
+                       '-O', rg_output, '-RGID', read_groups['ID'], '-RGLB', read_groups['LB'],
+                       '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM']]
+            run(rg_args)
 
-    # Mark and remove duplicates (make it an option to not remove, only marking?)
-    dup_output = '.'.join(rg_output.split('.')[:-1]) + '.DUP' + smpl_extension
-    if not check_existence([dup_output]):
-        click.echo('Marking and removing duplicates for %s...' % smpl_name)
-        # intermediary file
+    click.echo('Marking and removing duplicates for %s...' % smpl_name)
+    if readgroup_info is not None:
+        dup_output = '.'.join(rg_output.split('.')[:-1]) + '.DUP' + smpl_extension
         dup_args = [config['gatk4_path'], 'MarkDuplicates', '-I', rg_output,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
                     '-M', smpl_name + '.metrics']
+    else:
+        dup_output = output_dir + smpl_name + '.DUP' + smpl_extension
+        dup_args = [config['gatk4_path'], 'MarkDuplicates', '-I', sample,
+                    '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
+                    '-M', smpl_name + '.metrics']
+    if not check_existence([dup_output]):
         run(dup_args)
 
     # Realign around indels
