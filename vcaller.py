@@ -267,7 +267,7 @@ def process(output_dir, readgroup_info, known_indels, known_snps, reference, sam
     # sort and convert SAM extension files to BAM
     if smpl_extension.lower() == '.sam':
         click.echo('Sorting and converting %s to BAM...' % sample)
-        sort_args = ['samtools', 'sort', '-O', 'bam', '-o', smpl_name + '.bam', '-T', '/tmp/lane_temp', smpl]
+        sort_args = ['samtools', 'sort', '-O', 'bam', '-o', smpl_name + '.bam', '-T', '/tmp/lane_temp', sample]
         run(sort_args)
         smpl_extension = '.bam'
 
