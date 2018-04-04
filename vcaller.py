@@ -286,14 +286,13 @@ def process(output_dir, readgroup_info, known_indels, known_snps, reference, sam
                        '-O', rg_output, '-RGID', read_groups['ID'], '-RGLB', read_groups['LB'],
                        '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM']]
             run(rg_args)
-
-    click.echo('Marking and removing duplicates for %s...' % smpl_name)
-    if readgroup_info is not None:
+        click.echo('Marking and removing duplicates for %s...' % smpl_name)
         dup_output = '.'.join(rg_output.split('.')[:-1]) + '.DUP' + smpl_extension
         dup_args = [config['gatk4_path'], 'MarkDuplicates', '-I', rg_output,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
                     '-M', smpl_name + '.metrics']
     else:
+        click.echo('Marking and removing duplicates for %s...' % smpl_name)
         dup_output = output_dir + smpl_name + '.DUP' + smpl_extension
         dup_args = [config['gatk4_path'], 'MarkDuplicates', '-I', sample,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
@@ -304,11 +303,6 @@ def process(output_dir, readgroup_info, known_indels, known_snps, reference, sam
     # Realign around indels
     # Using gatk3 because of this
     # https://gatkforums.broadinstitute.org/gatk/discussion/11455/realignertargetcreator-and-indelrealigner
-    # Preparation: samtools index
-    if not check_existence([dup_output + '.bai']):
-        click.echo('Indexing %s...' % dup_output)
-        run(['samtools', 'index', dup_output])
-    # Known indels HAVE to be indexed... how to ensure?
     intervals_output = smpl_name + '.intervals'
     if not check_existence([intervals_output]):
         click.echo('Creating indel realignment intervals for %s...' % smpl_name)
