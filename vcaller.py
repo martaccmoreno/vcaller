@@ -60,14 +60,13 @@ def align_bwa(output, nthreads, reference, read1, read2):
     align_args = ['bwa', 'mem', '-M', '-t', nthreads, reference, read1]
     if read2 is not None:
         align_args += read2
-    sam_output = 'bwa_out.sam'
+    sam_output = output.split('.')[:-1]+'.sam'
     with open(sam_output, "w") as align_out:
-        print(align_args)
         run(align_args, stdout=align_out)
 
     # Sort and convert to BAM
     click.echo('Sorting and converting to BAM...')
-    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', sam_output, '-T', '/tmp/lane_temp', sam_output]
+    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', '/tmp/lane_temp', sam_output]
     run(sort_args)
 
     # clean up intermediary files

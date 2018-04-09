@@ -1,6 +1,0 @@
-gatk4_path = /home/marta/tools/gatk-4.0.2.1/gatk
-gatk3_path = /home/marta/tools/GenomeAnalysisTK.jar
-picard_path = /home/marta/tools/picard.jar
-working_directory = .
-bowtie2_path = /home/marta/tools/bowtie2-2.3.4.1-linux-x86_64
-tvc_path = /home/marta/tools/IonTorrent-VariantCaller-install/usr/local/bin/variant_caller_pipeline.py
