@@ -1,0 +1,23 @@
+{
+  "filePaths": {
+    "gatk3": "/home/marta/tools/GenomeAnalysisTK.jar",
+    "gatk4": "/home/marta/tools/gatk-4.0.2.1/gatk",
+    "picard": "/home/marta/tools/picard.jar",
+    "bowtie2": "/home/marta/tools/bowtie2-2.3.4.1-linux-x86_64",
+    "tvc": "/home/marta/tools/IonTorrent-VariantCaller-install/usr/local/bin/variant_caller_pipeline.py"
+  },
+  "options": [
+    {
+      "type": "home",
+      "number": "212 555-1234"
+    },
+    {
+      "type": "office",
+      "number": "646 555-4567"
+    },
+    {
+      "type": "mobile",
+      "number": "123 456-7890"
+    }
+  ]
+}

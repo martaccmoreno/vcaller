@@ -1,14 +1,13 @@
+import json
 import os
 from subprocess import run
 
 import click
 
 ##### IMPORT CONFIG #####
-config = {}
-with open(os.path.join(os.path.dirname(__file__), 'config.txt'), 'r') as cfg:
-    for line in cfg:
-        path = line.split('=')
-        config[path[0].strip()] = path[1].strip()
+current_dir = os.path.dirname(os.path.abspath(__file__))  # find where the script directory is (=/= working directory)
+with open(os.path.join(current_dir, 'config.json')) as data_file:
+    config = json.load(data_file)
 
 
 ##### AUXILIARY FUNCTIONS #####
@@ -95,7 +94,7 @@ def align_bwa(output, reference, read1, read2):
     else:
         click.echo('Need to generate index files!\n Indexing reference genome %s...' % reference)
         # Index the reference genome
-        index_args = [config['bowtie2_path'] + '/bowtie2-build', reference, ref_basename]  # last arg is the
+        index_args = [config['filePaths']['bowtie2'] + '/bowtie2-build', reference, ref_basename]  # last arg is the
         # output name
         run(index_args)
 
@@ -103,10 +102,10 @@ def align_bwa(output, reference, read1, read2):
     # Align the input reads against the reference genome
     sam_output = 'bowtie2_out.sam'
     if read2 is None:  # if read is single-ended
-        align_args = [config['bowtie2_path'] + '/bowtie2', '-x', ref_basename, read1, '-S', sam_output]
+        align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', ref_basename, read1, '-S', sam_output]
         click.echo('Aligning read %s against the reference genome...' % read1)
     else:  # if paired_end
-        align_args = [config['bowtie2_path'] + '/bowtie2', '-x', ref_basename,
+        align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', ref_basename,
                       '-1', read1, '-2', read2, '-S', sam_output]
         click.echo('Aligning reads %s %s against the reference genome...' % (read1, read2))
     run(align_args)
@@ -137,7 +136,7 @@ def call():
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_gatk(output, known_snps, clean_up, reference, sample1, sample2):
+def call_gatk(output, known_snps, reference, sample1, sample2):
     """Call variants using GATK's HaplotypeCaller.
     The GATK's HaplotypeCaller algorithm is used to call variants on aligned sequence files (samples).
 
@@ -167,7 +166,7 @@ def call_gatk(output, known_snps, clean_up, reference, sample1, sample2):
             'Dictionary file %s already exists.\nSkipping reference genome dictionary file generation.' % dict_file)
     else:
         click.echo('Generating reference genome dictionary %s...' % dict_file)
-        dict_vars = ['java', '-jar', config['picard_path'], 'CreateSequenceDictionary', 'R=%s' % reference,
+        dict_vars = ['java', '-jar', config['filePaths']['picard'], 'CreateSequenceDictionary', 'R=%s' % reference,
                      'O=%s' % dict_file]
         run(dict_vars)
 
@@ -184,10 +183,10 @@ def call_gatk(output, known_snps, clean_up, reference, sample1, sample2):
     click.echo('Calling variants on samples %s with GATK-HC...' % ', '.join(sample_list))
     if known_snps is None:
         # each sample needs to be preceed by an -I so this is not working for more than one sample?
-        gatk_args = [config['gatk4_path'], 'HaplotypeCaller', '-R', reference, '-I'] + sample_list + \
+        gatk_args = [config['filePaths']['gatk4'], 'HaplotypeCaller', '-R', reference, '-I'] + sample_list + \
                     ['-O', output]
     else:
-        gatk_args = [config['gatk4_path'], 'HaplotypeCaller', '-R', reference, '-I'] + sample_list + \
+        gatk_args = [config['filePaths']['gatk4'], 'HaplotypeCaller', '-R', reference, '-I'] + sample_list + \
                     ['--dbsnp', known_snps, '-O', output]
     run(gatk_args)
 
@@ -230,7 +229,7 @@ def call_bcftools(output, reference, sample1, sample2):
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_tvc (output_dir, reference, sample1, sample2):
+def call_tvc(output_dir, reference, sample1, sample2):
     """Call variants using TorrentVariantCaller (TVC).
 
     Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
@@ -239,7 +238,7 @@ def call_tvc (output_dir, reference, sample1, sample2):
 
     sample_list = [sample1] + [s for s in sample2]
     click.echo('Calling variants on %s with TVC...' % ', '.join(sample_list))
-    call_args = [config['tvc_path'], '-i', ','.join(sample_list), '-r', reference, '-o', output_dir]
+    call_args = [config['filePaths']['tvc'], '-i', ','.join(sample_list), '-r', reference, '-o', output_dir]
     run(call_args)
 
 
@@ -282,19 +281,19 @@ def process(output_dir, readgroup_info, known_indels, known_snps, reference, sam
                            'PL': rg_info[2].split(':')[1], 'SM': rg_info[3].split(':')[1],
                            'LB': rg_info[4].split(':')[1]}
             click.echo(read_groups)
-            rg_args = [config['gatk4_path'], 'AddOrReplaceReadGroups', '-I', sample,
+            rg_args = [config['filePaths']['gatk4'], 'AddOrReplaceReadGroups', '-I', sample,
                        '-O', rg_output, '-RGID', read_groups['ID'], '-RGLB', read_groups['LB'],
                        '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM']]
             run(rg_args)
         click.echo('Marking and removing duplicates for %s...' % smpl_name)
         dup_output = '.'.join(rg_output.split('.')[:-1]) + '.DUP' + smpl_extension
-        dup_args = [config['gatk4_path'], 'MarkDuplicates', '-I', rg_output,
+        dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', rg_output,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
                     '-M', smpl_name + '.metrics']
     else:
         click.echo('Marking and removing duplicates for %s...' % smpl_name)
         dup_output = output_dir + smpl_name + '.DUP' + smpl_extension
-        dup_args = [config['gatk4_path'], 'MarkDuplicates', '-I', sample,
+        dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', sample,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
                     '-M', smpl_name + '.metrics']
     if not check_existence([dup_output]):
@@ -306,14 +305,14 @@ def process(output_dir, readgroup_info, known_indels, known_snps, reference, sam
     intervals_output = smpl_name + '.intervals'
     if not check_existence([intervals_output]):
         click.echo('Creating indel realignment intervals for %s...' % smpl_name)
-        intervals_args = ['java', '-jar', config['gatk3_path'], '-T', 'RealignerTargetCreator', '-R', reference,
+        intervals_args = ['java', '-jar', config['filePaths']['gatk3'], '-T', 'RealignerTargetCreator', '-R', reference,
                           '-I', dup_output, '-o', intervals_output, '--known',
                           known_indels]  # only one set of known atm
         run(intervals_args)
     realign_output = '.'.join(dup_output.split('.')[:-1]) + '.RLGN' + smpl_extension
     if not check_existence([realign_output]):
         click.echo('Applying indel realignment based on the intervals for %s...' % smpl_name)
-        realign_args = ['java', '-jar', config['gatk3_path'], '-T', 'IndelRealigner', '-R', reference,
+        realign_args = ['java', '-jar', config['filePaths']['gatk3'], '-T', 'IndelRealigner', '-R', reference,
                         '-I', dup_output, '-targetIntervals', intervals_output, '-known', known_indels,
                         '-o', realign_output]
         run(realign_args)
@@ -322,21 +321,25 @@ def process(output_dir, readgroup_info, known_indels, known_snps, reference, sam
     table_output = smpl_name + '.table'  # should be the ACTUAL name for the file...
     if not check_existence([table_output]):
         click.echo('Creating base score recalibration table for %s...' % smpl_name)
-        table_args = [config['gatk4_path'], 'BaseRecalibrator', '-R', reference,
+        table_args = [config['filePaths']['gatk4'], 'BaseRecalibrator', '-R', reference,
                       '--known-sites', known_snps, '-I', realign_output, '-O', table_output]
         run(table_args)
     bqsr_output = output_dir + smpl_name + '.processed' + smpl_extension
     if not check_existence([bqsr_output]):
         click.echo('Running base score recalibration on %s...' % smpl_name)
-        bqsr_args = [config['gatk4_path'], 'ApplyBQSR',
+        bqsr_args = [config['filePaths']['gatk4'], 'ApplyBQSR',
                      '-I', realign_output, '-bqsr', table_output, '-O', bqsr_output]
         run(bqsr_args)
 
     # clean up intermediary files -- but only after we have the final file
-    if check_existence([bqsr_output]):
+    if check_existence([bqsr_output]) and readgroup_info is not None:
         click.echo('Cleaning up %s...' % ', '.join([rg_output, dup_output, intervals_output, realign_output,
                                                     table_output, smpl_name + '.metrics']))
         run(['rm', rg_output, dup_output, intervals_output, realign_output, table_output])
+    elif check_existence([bqsr_output]):
+        click.echo('Cleaning up %s...' % ', '.join([dup_output, intervals_output, realign_output,
+                                                    table_output, smpl_name + '.metrics']))
+    run(['rm', dup_output, intervals_output, realign_output, table_output])
 
 
 ##### FILTERING #####
