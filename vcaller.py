@@ -60,7 +60,7 @@ def align_bwa(output, nthreads, reference, read1, read2):
     align_args = ['bwa', 'mem', '-M', '-t', nthreads, reference, read1]
     if read2 is not None:
         align_args += read2
-    sam_output = output.split('.')[:-1]+'.sam'
+    sam_output = ''.join(output.split('.')[:-1])+'.sam'
     with open(sam_output, "w") as align_out:
         run(align_args, stdout=align_out)
 
