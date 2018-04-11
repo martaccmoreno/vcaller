@@ -227,7 +227,7 @@ def call_bcftools(output, reference, sample1, sample2):
 
 
 @call.command('tvc')
-@click.option('--output-dir', '-o', default='.',
+@click.option('--output-dir', '-d', default='.',
               help='Name of output directory; by default save to current directory.')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
@@ -247,7 +247,9 @@ def call_tvc(output_dir, reference, sample1, sample2):
 
 ##### POST-PROCESSING #####
 @cli.command('process', short_help='Prepare reads for variant calling.')
-@click.option('--output-dir', '-o', default='',
+@click.option('--output-name', '-o', default=None,
+              help='Name of the output file (extension will be added automatically)')
+@click.option('--output-dir', '-d', default='',
               help='Name of output directory; by default save to current directory.')
 @click.option('--readgroup-info', default=None, type=str, help='Add read group information  to the sample, which MUST '
                                                                'follow the format below:\n'
@@ -258,18 +260,22 @@ def call_tvc(output_dir, reference, sample1, sample2):
 @click.argument('known-snps', required=True, type=click.Path(exists=True))
 @click.argument('reference', required=True, type=click.Path(exists=True))
 @click.argument('sample', required=True, type=click.Path(exists=True))
-def process(output_dir, readgroup_info, known_indels, known_snps, reference, sample):
+def process(output, output_dir, readgroup_info, known_indels, known_snps, reference, sample):
     """Performs a group of steps for the post-processing in preparation for variant calling
     on one SAM/BAM sampl file. A must do for running the gatk subcommand under call."""
 
-    smpl_name, smpl_extension = '.'.join(sample.split('.')[:-1]), sample.split('.')[-1]
-    smpl_name = os.path.basename(smpl_name)
-    smpl_extension = '.' + smpl_extension
+    if output is None:
+        smpl_name, smpl_extension = '.'.join(sample.split('.')[:-1]), sample.split('.')[-1]
+        smpl_name = os.path.basename(smpl_name)
+        smpl_extension = '.' + smpl_extension
+    else:
+        smpl_name = os.path.basename(output)
+        smpl_extension = output.split('.')[-1]
 
     # sort and convert SAM extension files to BAM
-    if smpl_extension.lower() == '.sam':
+    if smpl_extension.lower() is '.sam':
         click.echo('Sorting and converting %s to BAM...' % sample)
-        sort_args = ['samtools', 'sort', '-O', 'bam', '-o', smpl_name + '.bam', '-T', '/tmp/lane_temp', sample]
+        sort_args = ['samtools', 'sort', '-O', 'bam', '-o', smpl_name+'.bam', '-T', '/tmp/lane_temp', sample]
         run(sort_args)
         smpl_extension = '.bam'
 
