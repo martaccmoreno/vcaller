@@ -63,7 +63,8 @@ def align_bwa(output, nthreads, reference, read1, read2):
         click.echo('Aligning read(s) against the reference genome...')  # find way to make message fancier with custom names
         align_args = ['bwa', 'mem', '-M', '-t', nthreads, reference, read1]
         if read2 is not None:
-            align_args += read2
+            align_args += [read2]
+            click.echo(align_args)
         with open(sam_output, "w") as align_out:
             run(align_args, stdout=align_out)
 
