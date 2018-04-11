@@ -56,7 +56,8 @@ def align_bwa(output, nthreads, reference, read1, read2):
         run(['bwa', 'index', reference])
 
     # Align input sequences to the reference genome
-    sam_output = ''.join(output.split('.')[:-1])+'.sam'
+    output_name = ''.join(output.split('.')[:-1])
+    sam_output = output_name+'.sam'
     if check_existence([sam_output]):
         click.echo('Aligned SAM read file already exists!')
     else:
@@ -69,7 +70,7 @@ def align_bwa(output, nthreads, reference, read1, read2):
 
     # Sort and convert to BAM
     click.echo('Sorting and converting to BAM...')
-    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', '/tmp/lane_temp', sam_output]
+    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', '/tmp/'+output_name+'_temp', sam_output]
     run(sort_args)
 
     # clean up intermediary files
