@@ -15,11 +15,11 @@ inherent to the usual "mix-and-match" approach utilized in the field.
 What follows is an example pipeline that calls variants on Illumina data:
 
     $ vcaller align bwa reference.fasta read1.fastq read2.fastq
-    # post alignment processing....
-    $ vcaller call gatk reference.fasta sample1.bam sample2.bam
+    $ valler process known_indels.vcf known_snps.vcf reference.fasta sample.bam
+    $ vcaller call gatk reference.fasta processed_sample.bam
     
 The final output will be a VCF file containing the called variants.
-Intermediary steps, while usually cleaned, may optionally be kept.
+Intermediary step files, while usually cleaned, may optionally be kept.
 
 Features
 --------
@@ -30,9 +30,12 @@ Features
 Installation
 ------------
 
-Install $project by running:
+Install vcaller using virtualenv:
 
-    install project
+    $ cd path/to/vcaller
+    $ virtualenv venv
+    $ . venv/bin/activate
+    $ pip install --editable .
 
 Contribute
 ----------

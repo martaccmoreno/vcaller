@@ -5,7 +5,8 @@ from subprocess import run
 import click
 
 ##### IMPORT CONFIG #####
-current_dir = os.path.dirname(os.path.abspath(__file__))  # find where the script directory is (=/= working directory)
+# find where the script directory is (=/= working directory)
+current_dir = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(current_dir, 'config.json')) as data_file:
     config = json.load(data_file)
 
@@ -18,9 +19,10 @@ def check_existence(filename_list):
     else:
         return False
 
-def flatten_list(list):
+
+def flatten_list(list_of_list):
     "Flatten a list of list into a single list."
-    return [item for sublist in list for item in sublist]
+    return [item for sublist in list_of_list for item in sublist]
 
 
 ##### MAIN GROUP #####
@@ -61,11 +63,12 @@ def align_bwa(output, nthreads, reference, read1, read2):
 
     # Align input sequences to the reference genome
     output_name = ''.join(output.split('.')[:-1])
-    sam_output = output_name+'.sam'
+    sam_output = output_name + '.sam'
     if check_existence([sam_output]):
         click.echo('Aligned SAM read file already exists!')
     else:
-        click.echo('Aligning read(s) against the reference genome...')  # find way to make message fancier with custom names
+        click.echo(
+            'Aligning read(s) against the reference genome...')  # find way to make message fancier with custom names
         align_args = ['bwa', 'mem', '-M', '-t', nthreads, reference, read1]
         if read2 is not None:
             align_args += [read2]
@@ -74,7 +77,7 @@ def align_bwa(output, nthreads, reference, read1, read2):
 
     # Sort and convert to BAM
     click.echo('Sorting and converting to BAM...')
-    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', '/tmp/'+output_name+'_temp', sam_output]
+    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', '/tmp/' + output_name + '_temp', sam_output]
     run(sort_args)
 
     # clean up intermediary files
@@ -102,9 +105,10 @@ def align_bwa(output, reference, read1, read2):
         run(index_args)
 
     output_basename = os.path.basename(''.join(output.split('.')[:-1]))
-    sam_output = output_basename+'.sam'
+    sam_output = output_basename + '.sam'
     if read2 is None:  # if read is single-ended
-        align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', ''.join(reference.split('.')[:-1]), read1, '-S', sam_output]
+        align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', ''.join(reference.split('.')[:-1]), read1,
+                      '-S', sam_output]
         click.echo('Aligning read %s against the reference genome...' % read1)
     else:  # if paired_end
         align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', ''.join(reference.split('.')[:-1]),
@@ -114,7 +118,7 @@ def align_bwa(output, reference, read1, read2):
 
     # Sort and convert to BAM
     click.echo('Sorting and converting to BAM...')
-    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', '/tmp/'+output_basename+'_temp', sam_output]
+    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', '/tmp/' + output_basename + '_temp', sam_output]
     run(sort_args)
 
     # clean up intermediary files
@@ -254,13 +258,17 @@ def call_tvc(output_dir, reference, sample1, sample2):
                                                                'follow the format below:\n'
                                                                r'\tID:identifier\tPU:platform_unit' '\n'
                                                                r'\tPL:platform\tSM:sample\tLB:library' '\n')
-@click.option('--add-known-snps', '-s', default='', help='Additional files containing known SNP information.', multiple=True)
-@click.option('--add-known-indels', '-i', default='', help='Additional files containing known indel information.', multiple=True)
-@click.argument('known-indels', required=True, type=click.Path(exists=True)) # ADD OPTIONS FOR MORE KNOWN INDELS AND SNPS
+@click.option('--add-known-snps', '-s', default='', help='Additional files containing known SNP information.',
+              multiple=True)
+@click.option('--add-known-indels', '-i', default='', help='Additional files containing known indel information.',
+              multiple=True)
+@click.argument('known-indels', required=True,
+                type=click.Path(exists=True))  # ADD OPTIONS FOR MORE KNOWN INDELS AND SNPS
 @click.argument('known-snps', required=True, type=click.Path(exists=True))
 @click.argument('reference', required=True, type=click.Path(exists=True))
 @click.argument('sample', required=True, type=click.Path(exists=True))
-def process(output, output_dir, readgroup_info, add_known_snps, add_known_indels, known_indels, known_snps, reference, sample):
+def process(output, output_dir, readgroup_info, add_known_snps, add_known_indels, known_indels, known_snps, reference,
+            sample):
     """Performs a group of steps for the post-processing in preparation for variant calling
     on one SAM/BAM sampl file. A must do for running the gatk subcommand under call."""
 
@@ -275,7 +283,7 @@ def process(output, output_dir, readgroup_info, add_known_snps, add_known_indels
     # sort and convert SAM extension files to BAM
     if smpl_extension.lower() is '.sam':
         click.echo('Sorting and converting %s to BAM...' % sample)
-        sort_args = ['samtools', 'sort', '-O', 'bam', '-o', smpl_name+'.bam', '-T', '/tmp/lane_temp', sample]
+        sort_args = ['samtools', 'sort', '-O', 'bam', '-o', smpl_name + '.bam', '-T', '/tmp/lane_temp', sample]
         run(sort_args)
         smpl_extension = '.bam'
 
@@ -322,8 +330,8 @@ def process(output, output_dir, readgroup_info, add_known_snps, add_known_indels
     if not check_existence([realign_output]):
         click.echo('Applying indel realignment based on the intervals for %s...' % smpl_name)
         realign_args = ['java', '-jar', config['filePaths']['gatk3'], '-T', 'IndelRealigner', '-R', reference,
-                        '-I', dup_output, '-targetIntervals', intervals_output, '-known', known_indels]+\
-                       flatten_list([['-known']+ [add_known_indels[i]] for i in range(len(add_known_indels))])+\
+                        '-I', dup_output, '-targetIntervals', intervals_output, '-known', known_indels] + \
+                       flatten_list([['-known'] + [add_known_indels[i]] for i in range(len(add_known_indels))]) + \
                        ['-o', realign_output]
         run(realign_args)
 
@@ -332,9 +340,9 @@ def process(output, output_dir, readgroup_info, add_known_snps, add_known_indels
     if not check_existence([table_output]):
         click.echo('Creating base score recalibration table for %s...' % smpl_name)
         table_args = [config['filePaths']['gatk4'], 'BaseRecalibrator', '-R', reference,
-                      '--known-sites', known_snps]+\
-                     flatten_list([['--known-sites']+[add_known_snps[i]] for i in range(len(add_known_snps))])\
-                     +['-I', realign_output, '-O', table_output]
+                      '--known-sites', known_snps] + \
+                     flatten_list([['--known-sites'] + [add_known_snps[i]] for i in range(len(add_known_snps))]) + \
+                     ['-I', realign_output, '-O', table_output]
         run(table_args)
     bqsr_output = output_dir + smpl_name + '.processed' + smpl_extension
     if not check_existence([bqsr_output]):
@@ -352,6 +360,7 @@ def process(output, output_dir, readgroup_info, add_known_snps, add_known_indels
         click.echo('Cleaning up %s...' % ', '.join([dup_output, intervals_output, realign_output,
                                                     table_output, smpl_name + '.metrics']))
     run(['rm', dup_output, intervals_output, realign_output, table_output])
+
 
 ##### PREP #####
 
