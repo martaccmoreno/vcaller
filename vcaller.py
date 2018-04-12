@@ -353,6 +353,19 @@ def process(output, output_dir, readgroup_info, add_known_snps, add_known_indels
                                                     table_output, smpl_name + '.metrics']))
     run(['rm', dup_output, intervals_output, realign_output, table_output])
 
+##### PREP #####
+
+@cli.command('tabix', short_help='Quickly tabix gunzipped known files.')
+@click.argument('gzipped_files', required=True, type=click.Path(exists=True), nargs=-1)
+def tabix(gzipped_files):
+    for file in gzipped_files:
+        click.echo('Gunzipping %s...' % file)
+        run(['gunzip', file])
+        click.echo('Compressed gunzipped file %s using bgzip...' % file)
+        run(['bgzip', ''.join(file.split('.')[:-1])])
+        click.echo('Indexing file %s using tabix....' % file)
+        run(['tabix', file])
+
 
 ##### FILTERING #####
 @cli.command('filter', short_help='Filter variants in a vcf file.')
