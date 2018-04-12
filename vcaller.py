@@ -92,7 +92,7 @@ def align_bwa(output, reference, read1, read2):
     ref_basename = os.path.basename(reference.split('.')[0])  # bowtie2 uses the reference's basename (no suffix) a lot
 
     suffix_list = ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', '.rev.1.bt2', '.rev.2.bt2']
-    if check_existence([ref_basename + suffix for suffix in suffix_list]):
+    if check_existence([''.join(reference.split('.')[:-1]) + suffix for suffix in suffix_list]):
         click.echo('Index files already exist!\n Skipping reference genome indexing.')
     else:
         click.echo('Need to generate index files!\n Indexing reference genome %s...' % reference)
