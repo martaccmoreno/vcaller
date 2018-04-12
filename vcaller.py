@@ -18,6 +18,10 @@ def check_existence(filename_list):
     else:
         return False
 
+def flatten_list(list):
+    "Flatten a list of list into a single list."
+    return [item for sublist in list for item in sublist]
+
 
 ##### MAIN GROUP #####
 @click.group()
@@ -89,23 +93,21 @@ def align_bwa(output, reference, read1, read2):
     It is only mandatory to include the reference genome file and a sample read as arguments.
     If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
 
-    ref_basename = os.path.basename(reference.split('.')[0])  # bowtie2 uses the reference's basename (no suffix) a lot
-
     suffix_list = ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', '.rev.1.bt2', '.rev.2.bt2']
     if check_existence([''.join(reference.split('.')[:-1]) + suffix for suffix in suffix_list]):
         click.echo('Index files already exist!\n Skipping reference genome indexing.')
     else:
         click.echo('Need to generate index files!\n Indexing reference genome %s...' % reference)
-        index_args = [config['filePaths']['bowtie2'] + '/bowtie2-build', reference, ref_basename]  # last arg is the
+        index_args = [config['filePaths']['bowtie2'] + '/bowtie2-build', reference, ''.join(reference.split('.')[:-1])]
         run(index_args)
 
     output_basename = os.path.basename(''.join(output.split('.')[:-1]))
     sam_output = output_basename+'.sam'
     if read2 is None:  # if read is single-ended
-        align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', ref_basename, read1, '-S', sam_output]
+        align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', ''.join(reference.split('.')[:-1]), read1, '-S', sam_output]
         click.echo('Aligning read %s against the reference genome...' % read1)
     else:  # if paired_end
-        align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', ref_basename,
+        align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', ''.join(reference.split('.')[:-1]),
                       '-1', read1, '-2', read2, '-S', sam_output]
         click.echo('Aligning reads %s %s against the reference genome...' % (read1, read2))
     run(align_args)
@@ -252,12 +254,13 @@ def call_tvc(output_dir, reference, sample1, sample2):
                                                                'follow the format below:\n'
                                                                r'\tID:identifier\tPU:platform_unit' '\n'
                                                                r'\tPL:platform\tSM:sample\tLB:library' '\n')
-# Try to make these 2 options, to see if it's possible to give more than 1 set
+@click.option('--add-known-snps', '-s', default='', help='Additional files containing known SNP information.', multiple=True)
+@click.option('--add-known-indels', '-i', default='', help='Additional files containing known indel information.', multiple=True)
 @click.argument('known-indels', required=True, type=click.Path(exists=True)) # ADD OPTIONS FOR MORE KNOWN INDELS AND SNPS
 @click.argument('known-snps', required=True, type=click.Path(exists=True))
 @click.argument('reference', required=True, type=click.Path(exists=True))
 @click.argument('sample', required=True, type=click.Path(exists=True))
-def process(output, output_dir, readgroup_info, known_indels, known_snps, reference, sample):
+def process(output, output_dir, readgroup_info, add_known_snps, add_known_indels, known_indels, known_snps, reference, sample):
     """Performs a group of steps for the post-processing in preparation for variant calling
     on one SAM/BAM sampl file. A must do for running the gatk subcommand under call."""
 
@@ -319,8 +322,9 @@ def process(output, output_dir, readgroup_info, known_indels, known_snps, refere
     if not check_existence([realign_output]):
         click.echo('Applying indel realignment based on the intervals for %s...' % smpl_name)
         realign_args = ['java', '-jar', config['filePaths']['gatk3'], '-T', 'IndelRealigner', '-R', reference,
-                        '-I', dup_output, '-targetIntervals', intervals_output, '-known', known_indels,
-                        '-o', realign_output]
+                        '-I', dup_output, '-targetIntervals', intervals_output, '-known', known_indels]+\
+                       flatten_list([['-known']+ [add_known_indels[i]] for i in range(len(add_known_indels))])+\
+                       ['-o', realign_output]
         run(realign_args)
 
     # BQSR
@@ -328,7 +332,9 @@ def process(output, output_dir, readgroup_info, known_indels, known_snps, refere
     if not check_existence([table_output]):
         click.echo('Creating base score recalibration table for %s...' % smpl_name)
         table_args = [config['filePaths']['gatk4'], 'BaseRecalibrator', '-R', reference,
-                      '--known-sites', known_snps, '-I', realign_output, '-O', table_output]
+                      '--known-sites', known_snps]+\
+                     flatten_list([['--known-sites']+[add_known_snps[i]] for i in range(len(add_known_snps))])\
+                     +['-I', realign_output, '-O', table_output]
         run(table_args)
     bqsr_output = output_dir + smpl_name + '.processed' + smpl_extension
     if not check_existence([bqsr_output]):
