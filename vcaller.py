@@ -79,7 +79,7 @@ def align_bwa(output, nthreads, reference, read1, read2):
 
 
 @align.command('bowtie2')
-@click.option('--output', '-o', default='bowtie2_out.bam',
+@click.option('--output', '-o', default='bowtie2_output.bam',
               help='Name of the output file (extension will be added automatically)')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('read1', type=click.Path(exists=True))
@@ -89,21 +89,18 @@ def align_bwa(output, reference, read1, read2):
     It is only mandatory to include the reference genome file and a sample read as arguments.
     If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
 
-    ref_basename = reference.split('.')[0]  # bowtie2 uses the reference's basename (no suffix) a lot
-    # check_index: check if reference genome is already indexed
+    ref_basename = os.path.basename(reference.split('.')[0])  # bowtie2 uses the reference's basename (no suffix) a lot
+
     suffix_list = ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', '.rev.1.bt2', '.rev.2.bt2']
     if check_existence([ref_basename + suffix for suffix in suffix_list]):
         click.echo('Index files already exist!\n Skipping reference genome indexing.')
     else:
         click.echo('Need to generate index files!\n Indexing reference genome %s...' % reference)
-        # Index the reference genome
         index_args = [config['filePaths']['bowtie2'] + '/bowtie2-build', reference, ref_basename]  # last arg is the
-        # output name
         run(index_args)
 
-    # ADD MULTI-THREAD OPTION -p !!
-    # Align the input reads against the reference genome
-    sam_output = 'bowtie2_out.sam'
+    output_basename = os.path.basename(''.join(output.split('.')[:-1]))
+    sam_output = output_basename+'.sam'
     if read2 is None:  # if read is single-ended
         align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', ref_basename, read1, '-S', sam_output]
         click.echo('Aligning read %s against the reference genome...' % read1)
@@ -115,7 +112,7 @@ def align_bwa(output, reference, read1, read2):
 
     # Sort and convert to BAM
     click.echo('Sorting and converting to BAM...')
-    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', '/tmp/lane_temp', sam_output]
+    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', '/tmp/'+output_basename+'_temp', sam_output]
     run(sort_args)
 
     # clean up intermediary files
@@ -256,7 +253,7 @@ def call_tvc(output_dir, reference, sample1, sample2):
                                                                r'\tID:identifier\tPU:platform_unit' '\n'
                                                                r'\tPL:platform\tSM:sample\tLB:library' '\n')
 # Try to make these 2 options, to see if it's possible to give more than 1 set
-@click.argument('known-indels', required=True, type=click.Path(exists=True))
+@click.argument('known-indels', required=True, type=click.Path(exists=True)) # ADD OPTIONS FOR MORE KNOWN INDELS AND SNPS
 @click.argument('known-snps', required=True, type=click.Path(exists=True))
 @click.argument('reference', required=True, type=click.Path(exists=True))
 @click.argument('sample', required=True, type=click.Path(exists=True))
