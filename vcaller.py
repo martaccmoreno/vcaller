@@ -352,7 +352,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
     if output_name is None:
         bqsr_output = output_dir + smpl_name + '.processed.' + smpl_extension
     else:
-        bqsr_output = output_dir + output_name
+        bqsr_output = output_name
     if not check_existence([bqsr_output]):
         click.echo('Running base score recalibration on %s...' % smpl_name)
         bqsr_args = [config['filePaths']['gatk4'], 'ApplyBQSR',
