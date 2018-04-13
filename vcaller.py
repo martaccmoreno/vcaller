@@ -268,18 +268,18 @@ def call_tvc(output_dir, reference, sample1, sample2):
 @click.argument('known-snps', required=True, type=click.Path(exists=True))
 @click.argument('reference', required=True, type=click.Path(exists=True))
 @click.argument('sample', required=True, type=click.Path(exists=True))
-def process(output, output_dir, readgroup_info, add_known_snps, add_known_indels, known_indels, known_snps, reference,
+def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_indels, known_indels, known_snps, reference,
             sample):
     """Performs a group of steps for the post-processing in preparation for variant calling
     on one SAM/BAM sampl file. A must do for running the gatk subcommand under call."""
 
-    if output is None:
+    if output_name is None:
         smpl_name, smpl_extension = '.'.join(sample.split('.')[:-1]), sample.split('.')[-1]
         smpl_name = os.path.basename(smpl_name)
         smpl_extension = '.' + smpl_extension
     else:
-        smpl_name = os.path.basename(output)
-        smpl_extension = output.split('.')[-1]
+        smpl_name = os.path.basename(output_name)
+        smpl_extension = output_name.split('.')[-1]
 
     # sort and convert SAM extension files to BAM
     if smpl_extension.lower() is '.sam':
