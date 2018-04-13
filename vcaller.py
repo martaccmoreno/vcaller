@@ -372,10 +372,15 @@ def tabix(gzipped_files):
         if '.gz' in file:
             click.echo('Gunzipping %s...' % file)
             run(['gunzip', file])
-        click.echo('Compressing file %s using bgzip...' % file)
-        run(['bgzip', '.'.join(file.split('.')[:-1])+'.gz'])
-        click.echo('Indexing file %s using tabix....' % file)
-        run(['tabix', file])
+            click.echo('Compressing file %s using bgzip...' % file)
+            run(['bgzip', '.'.join(file.split('.')[:-1])])
+            click.echo('Compressing file %s using bgzip...' % file)
+            run(['bgzip', file])
+        else:
+            click.echo('Compressing file %s using bgzip...' % file)
+            run(['bgzip', file])
+            click.echo('Indexing file %s using tabix....' % file)
+            run(['tabix', file+'.gz'])
 
 
 ##### FILTERING #####
