@@ -290,7 +290,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
 
     # More info on RGs: https://gatkforums.broadinstitute.org/gatk/discussion/6472/read-groups
     if readgroup_info is not None:
-        rg_output = output_dir + smpl_name + '.RG' + smpl_extension
+        rg_output = output_dir + smpl_name + '.RG.' + smpl_extension
         if not check_existence([rg_output]):
             click.echo('Adding Read Group information to %s...' % sample)
             rg_info = readgroup_info.split(',')
@@ -303,13 +303,13 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
                        '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM']]
             run(rg_args)
         click.echo('Marking and removing duplicates for %s...' % smpl_name)
-        dup_output = '.'.join(rg_output.split('.')[:-1]) + '.DUP' + smpl_extension
+        dup_output = '.'.join(rg_output.split('.')[:-1]) + '.DUP.' + smpl_extension
         dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', rg_output,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
                     '-M', smpl_name + '.metrics']
     else:
         click.echo('Marking and removing duplicates for %s...' % smpl_name)
-        dup_output = output_dir + smpl_name + '.DUP' + smpl_extension
+        dup_output = output_dir + smpl_name + '.DUP.' + smpl_extension
         dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', sample,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
                     '-M', smpl_name + '.metrics']
@@ -326,7 +326,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
                           '-I', dup_output, '-o', intervals_output, '--known',
                           known_indels]  # only one set of known atm
         run(intervals_args)
-    realign_output = '.'.join(dup_output.split('.')[:-1]) + '.RLGN' + smpl_extension
+    realign_output = '.'.join(dup_output.split('.')[:-1]) + '.RLGN.' + smpl_extension
     if not check_existence([realign_output]):
         click.echo('Applying indel realignment based on the intervals for %s...' % smpl_name)
         realign_args = ['java', '-jar', config['filePaths']['gatk3'], '-T', 'IndelRealigner', '-R', reference,
@@ -344,7 +344,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
                      flatten_list([['--known-sites'] + [add_known_snps[i]] for i in range(len(add_known_snps))]) + \
                      ['-I', realign_output, '-O', table_output]
         run(table_args)
-    bqsr_output = output_dir + smpl_name + '.processed' + smpl_extension
+    bqsr_output = output_dir + smpl_name + '.processed.' + smpl_extension
     if not check_existence([bqsr_output]):
         click.echo('Running base score recalibration on %s...' % smpl_name)
         bqsr_args = [config['filePaths']['gatk4'], 'ApplyBQSR',
