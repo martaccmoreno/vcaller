@@ -257,8 +257,8 @@ def call_tvc(output_dir, reference, sample1, sample2):
               help='Name of output directory; by default save to current directory.')
 @click.option('--readgroup-info', default=None, type=str, help='Add read group information  to the sample, which MUST '
                                                                'follow the format below:\n'
-                                                               r'\tID:identifier\tPU:platform_unit' '\n'
-                                                               r'\tPL:platform\tSM:sample\tLB:library' '\n')
+                                                               'ID:identifier,PU:platform_unit,' '\n'
+                                                               'PL:platform,SM:sample,LB:library' '\n')
 @click.option('--add-known-snps', '-s', default='', help='Additional files containing known SNP information.',
               multiple=True)
 @click.option('--add-known-indels', '-i', default='', help='Additional files containing known indel information.',
@@ -293,8 +293,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         rg_output = output_dir + smpl_name + '.RG' + smpl_extension
         if not check_existence([rg_output]):
             click.echo('Adding Read Group information to %s...' % sample)
-            rg_info = readgroup_info.split(r'\t')
-            click.echo(rg_info)
+            rg_info = readgroup_info.split(',')
             read_groups = {'ID': rg_info[0].split(':')[1], 'PU': rg_info[1].split(':')[1],
                            'PL': rg_info[2].split(':')[1], 'SM': rg_info[3].split(':')[1],
                            'LB': rg_info[4].split(':')[1]}
