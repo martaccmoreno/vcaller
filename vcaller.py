@@ -77,7 +77,8 @@ def align_bwa(output, nthreads, reference, read1, read2):
 
     # Sort and convert to BAM
     click.echo('Sorting and converting to BAM...')
-    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', '/tmp/' + output_name + '_temp', sam_output]
+    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', '/tmp/' + os.path.basename(output_name) + '.temp',
+                 sam_output]
     run(sort_args)
 
     # clean up intermediary files
@@ -283,7 +284,7 @@ def process(output, output_dir, readgroup_info, add_known_snps, add_known_indels
     # sort and convert SAM extension files to BAM
     if smpl_extension.lower() is '.sam':
         click.echo('Sorting and converting %s to BAM...' % sample)
-        sort_args = ['samtools', 'sort', '-O', 'bam', '-o', smpl_name + '.bam', '-T', '/tmp/lane_temp', sample]
+        sort_args = ['samtools', 'sort', '-O', 'bam', '-o', smpl_name + '.bam', '-T', '/tmp/'+smpl_name+'.temp', sample]
         run(sort_args)
         smpl_extension = '.bam'
 
