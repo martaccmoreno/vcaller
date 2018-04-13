@@ -62,7 +62,7 @@ def align_bwa(output, nthreads, reference, read1, read2):
         run(['bwa', 'index', reference])
 
     # Align input sequences to the reference genome
-    output_name = ''.join(output.split('.')[:-1])
+    output_name = '.'.join(output.split('.')[:-1])
     sam_output = output_name + '.sam'
     if check_existence([sam_output]):
         click.echo('Aligned SAM read file already exists!')
@@ -98,21 +98,21 @@ def align_bwa(output, reference, read1, read2):
     If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
 
     suffix_list = ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', '.rev.1.bt2', '.rev.2.bt2']
-    if check_existence([''.join(reference.split('.')[:-1]) + suffix for suffix in suffix_list]):
+    if check_existence(['.'.join(reference.split('.')[:-1]) + suffix for suffix in suffix_list]):
         click.echo('Index files already exist!\n Skipping reference genome indexing.')
     else:
         click.echo('Need to generate index files!\n Indexing reference genome %s...' % reference)
-        index_args = [config['filePaths']['bowtie2'] + '/bowtie2-build', reference, ''.join(reference.split('.')[:-1])]
+        index_args = [config['filePaths']['bowtie2'] + '/bowtie2-build', reference, '.'.join(reference.split('.')[:-1])]
         run(index_args)
 
-    output_basename = os.path.basename(''.join(output.split('.')[:-1]))
+    output_basename = os.path.basename('.'.join(output.split('.')[:-1]))
     sam_output = output_basename + '.sam'
     if read2 is None:  # if read is single-ended
-        align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', ''.join(reference.split('.')[:-1]), read1,
+        align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', '.'.join(reference.split('.')[:-1]), read1,
                       '-S', sam_output]
         click.echo('Aligning read %s against the reference genome...' % read1)
     else:  # if paired_end
-        align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', ''.join(reference.split('.')[:-1]),
+        align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', '.'.join(reference.split('.')[:-1]),
                       '-1', read1, '-2', read2, '-S', sam_output]
         click.echo('Aligning reads %s %s against the reference genome...' % (read1, read2))
     run(align_args)
@@ -369,10 +369,11 @@ def process(output, output_dir, readgroup_info, add_known_snps, add_known_indels
 @click.argument('gzipped_files', required=True, type=click.Path(exists=True), nargs=-1)
 def tabix(gzipped_files):
     for file in gzipped_files:
-        click.echo('Gunzipping %s...' % file)
-        run(['gunzip', file])
-        click.echo('Compressed gunzipped file %s using bgzip...' % file)
-        run(['bgzip', ''.join(file.split('.')[:-1])])
+        if '.gz' in file:
+            click.echo('Gunzipping %s...' % file)
+            run(['gunzip', file])
+        click.echo('Compressing file %s using bgzip...' % file)
+        run(['bgzip', '.'.join(file.split('.')[:-1])])
         click.echo('Indexing file %s using tabix....' % file)
         run(['tabix', file])
 
