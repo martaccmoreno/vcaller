@@ -324,7 +324,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
     # Realign around indels
     # Using gatk3 because of this
     # https://gatkforums.broadinstitute.org/gatk/discussion/11455/realignertargetcreator-and-indelrealigner
-    intervals_output = smpl_name + '.intervals'
+    intervals_output = output_dir + smpl_name + '.intervals'
     if not check_existence([intervals_output]):
         click.echo('Creating indel realignment intervals for %s...' % smpl_name)
         intervals_args = ['java', '-jar', config['filePaths']['gatk3'], '-T', 'RealignerTargetCreator', '-R', reference,
@@ -341,7 +341,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         run(realign_args)
 
     # BQSR
-    table_output = smpl_name + '.table'
+    table_output = output_dir + smpl_name + '.table'
     if not check_existence([table_output]):
         click.echo('Creating base score recalibration table for %s...' % smpl_name)
         table_args = [config['filePaths']['gatk4'], 'BaseRecalibrator', '-R', reference,
