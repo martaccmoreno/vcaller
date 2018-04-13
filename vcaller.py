@@ -373,7 +373,7 @@ def tabix(gzipped_files):
             click.echo('Gunzipping %s...' % file)
             run(['gunzip', file])
         click.echo('Compressing file %s using bgzip...' % file)
-        run(['bgzip', '.'.join(file.split('.')[:-1])])
+        run(['bgzip', '.'.join(file.split('.')[:-1])+'.gz'])
         click.echo('Indexing file %s using tabix....' % file)
         run(['tabix', file])
 
