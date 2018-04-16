@@ -275,7 +275,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
 
     smpl_name, smpl_extension = '.'.join(os.path.basename(sample).split('.')[:-1]), sample.split('.')[-1]
     smpl_name = os.path.basename(smpl_name)
-    smpl_extension = '.' + smpl_extension
+    smpl_extension = '.'+smpl_extension
 
     # sort and convert SAM extension files to BAM
     if smpl_extension.lower() is '.sam':
@@ -286,7 +286,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
 
     # More info on RGs: https://gatkforums.broadinstitute.org/gatk/discussion/6472/read-groups
     if readgroup_info is not None:
-        rg_output = output_dir + smpl_name + '.RG.' + smpl_extension
+        rg_output = output_dir + smpl_name + '.RG' + smpl_extension
         if not check_existence([rg_output]):
             click.echo('Adding Read Group information to %s...' % sample)
             rg_info = readgroup_info.split(',')
@@ -297,7 +297,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
                        '-O', rg_output, '-RGID', read_groups['ID'], '-RGLB', read_groups['LB'],
                        '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM']]
             run(rg_args)
-        dup_output = '.'.join(rg_output.split('.')[:-1]) + '.DUP.' + smpl_extension
+        dup_output = '.'.join(rg_output.split('.')[:-1]) + '.DUP' + smpl_extension
         click.echo('Marking and removing duplicates for %s...' % smpl_name)
         dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', rg_output,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
@@ -305,7 +305,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         click.echo('Indexing %s...' % smpl_name)
         run(['samtools', 'index', dup_output])
     else:
-        dup_output = output_dir + smpl_name + '.DUP.' + smpl_extension
+        dup_output = output_dir + smpl_name + '.DUP' + smpl_extension
         click.echo('Marking and removing duplicates for %s...' % smpl_name)
         dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', sample,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
@@ -327,7 +327,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
                           '-I', dup_output, '-o', intervals_output, '--known',
                           known_indels]
         run(intervals_args)
-    realign_output = '.'.join(dup_output.split('.')[:-1]) + '.RLGN.' + smpl_extension
+    realign_output = '.'.join(dup_output.split('.')[:-1]) + '.RLGN' + smpl_extension
     if not check_existence([realign_output]):
         click.echo('Applying indel realignment based on the intervals for %s...' % smpl_name)
         realign_args = ['java', '-jar', config['filePaths']['gatk3'], '-T', 'IndelRealigner', '-R', reference,
@@ -346,7 +346,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
                      ['-I', realign_output, '-O', table_output]
         run(table_args)
     if output_name is None:
-        bqsr_output = output_dir + smpl_name + '.processed.' + smpl_extension
+        bqsr_output = output_dir + smpl_name + '.processed' + smpl_extension
     else:
         bqsr_output = output_name
     if not check_existence([bqsr_output]):
