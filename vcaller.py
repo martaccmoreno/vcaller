@@ -278,7 +278,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         smpl_name = os.path.basename(smpl_name)
         smpl_extension = '.' + smpl_extension
     else:
-        smpl_name = os.path.basename(sample)
+        smpl_name = os.path.basename(sample).split('.')[:-1]
         smpl_extension = sample.split('.')[-1]
 
     # sort and convert SAM extension files to BAM
@@ -360,15 +360,16 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         run(bqsr_args)
 
     # clean up intermediary files -- but only after we have the final file
-    if check_existence([bqsr_output]) and readgroup_info is not None:
-        click.echo('Cleaning up %s...' % ', '.join([rg_output, dup_output, intervals_output, realign_output,
+    if check_existence([bqsr_output]):
+        if readgroup_info is not None:
+            click.echo('Cleaning up %s...' % ', '.join([rg_output, dup_output, intervals_output, realign_output,
+                                                        table_output, output_dir + smpl_name + '.metrics']))
+            run(['rm', rg_output, dup_output, intervals_output, realign_output,
+                 table_output, output_dir + smpl_name + '.metrics'])
+        else:
+            click.echo('Cleaning up %s...' % ', '.join([dup_output, intervals_output, realign_output,
                                                     table_output, output_dir + smpl_name + '.metrics']))
-        run(['rm', rg_output, dup_output, intervals_output, realign_output,
-             table_output, output_dir + smpl_name + '.metrics'])
-    elif check_existence([bqsr_output]):
-        click.echo('Cleaning up %s...' % ', '.join([dup_output, intervals_output, realign_output,
-                                                    table_output, output_dir + smpl_name + '.metrics']))
-    run(['rm', dup_output, intervals_output, realign_output, table_output])
+            run(['rm', dup_output, intervals_output, realign_output, table_output])
 
 
 ##### PREP #####
