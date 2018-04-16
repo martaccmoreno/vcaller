@@ -278,8 +278,8 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         smpl_name = os.path.basename(smpl_name)
         smpl_extension = '.' + smpl_extension
     else:
-        smpl_name = os.path.basename(output_name)
-        smpl_extension = output_name.split('.')[-1]
+        smpl_name = os.path.basename(sample)
+        smpl_extension = sample.split('.')[-1]
 
     # sort and convert SAM extension files to BAM
     if smpl_extension.lower() is '.sam':
@@ -305,7 +305,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         click.echo('Marking and removing duplicates for %s...' % smpl_name)
         dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', rg_output,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
-                    '-M', smpl_name + '.metrics']
+                    '-M', output_dir + smpl_name + '.metrics']
         click.echo('Indexing %s...' % smpl_name)
         run(['samtools', 'index', dup_output])
     else:
@@ -313,7 +313,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         click.echo('Marking and removing duplicates for %s...' % smpl_name)
         dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', sample,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
-                    '-M', smpl_name + '.metrics']
+                    '-M', output_dir + smpl_name + '.metrics']
         click.echo('Indexing %s...' % smpl_name)
         run(['samtools', 'index', dup_output])
     if not check_existence([dup_output]):
@@ -362,12 +362,13 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
     # clean up intermediary files -- but only after we have the final file
     if check_existence([bqsr_output]) and readgroup_info is not None:
         click.echo('Cleaning up %s...' % ', '.join([rg_output, dup_output, intervals_output, realign_output,
-                                                    table_output, smpl_name + '.metrics']))
-        run(['rm', rg_output, dup_output, intervals_output, realign_output, table_output])
+                                                    table_output, output_dir + smpl_name + '.metrics']))
+        run(['rm', rg_output, dup_output, intervals_output, realign_output,
+             table_output, output_dir + smpl_name + '.metrics'])
     elif check_existence([bqsr_output]):
         click.echo('Cleaning up %s...' % ', '.join([dup_output, intervals_output, realign_output,
-                                                    table_output, smpl_name + '.metrics']))
-    #run(['rm', dup_output, intervals_output, realign_output, table_output])
+                                                    table_output, output_dir + smpl_name + '.metrics']))
+    run(['rm', dup_output, intervals_output, realign_output, table_output])
 
 
 ##### PREP #####
