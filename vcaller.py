@@ -98,7 +98,8 @@ def align_bwa(output, reference, read1, read2):
     If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
 
     suffix_list = ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', '.rev.1.bt2', '.rev.2.bt2']
-    if check_existence(['.'.join(reference.split('.')[:-1]) + suffix for suffix in suffix_list]):
+    suffixes = ['.'.join(reference.split('.')[:-1]) + suffix for suffix in suffix_list]
+    if check_existence(suffixes):
         click.echo('Index files already exist!\n Skipping reference genome indexing.')
     else:
         click.echo('Need to generate index files!\n Indexing reference genome %s...' % reference)
@@ -360,13 +361,13 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         if readgroup_info is not None:
             click.echo('Cleaning up %s...' % ', '.join([rg_output, dup_output, intervals_output, realign_output,
                                                         table_output, output_dir + smpl_name + '.metrics']))
-            indice_files = [item+'.bai' for item in [rg_output, dup_output, realign_output]]
+            index_files = [item+'.bai' for item in [rg_output, dup_output, realign_output]]
             run(['rm', rg_output, dup_output, intervals_output, realign_output,
-                 table_output, output_dir + smpl_name + '.metrics'] + indice_files)
+                 table_output, output_dir + smpl_name + '.metrics'] + index_files)
         else:
-            indice_files = [item+'.bai' for item in [dup_output, realign_output]]
+            index_files = [item+'.bai' for item in [dup_output, realign_output]]
             click.echo('Cleaning up %s...' % ', '.join([dup_output, intervals_output, realign_output,
-                                                    table_output, output_dir + smpl_name + '.metrics'] + indice_files))
+                                                    table_output, output_dir + smpl_name + '.metrics'] + index_files))
             run(['rm', dup_output, intervals_output, realign_output, table_output])
 
 
