@@ -357,14 +357,17 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
 
     # clean up intermediary files -- but only after we have the final file
     if check_existence([bqsr_output]):
+        indice_files = [item+'.bai' for item in [rg_output, dup_output, intervals_output,
+                                                                           realign_output, table_output]]
         if readgroup_info is not None:
             click.echo('Cleaning up %s...' % ', '.join([rg_output, dup_output, intervals_output, realign_output,
                                                         table_output, output_dir + smpl_name + '.metrics']))
+            click.echo(indice_files)
             run(['rm', rg_output, dup_output, intervals_output, realign_output,
-                 table_output, output_dir + smpl_name + '.metrics'])
+                 table_output, output_dir + smpl_name + '.metrics'] + indice_files)
         else:
             click.echo('Cleaning up %s...' % ', '.join([dup_output, intervals_output, realign_output,
-                                                    table_output, output_dir + smpl_name + '.metrics']))
+                                                    table_output, output_dir + smpl_name + '.metrics'] + indice_files))
             run(['rm', dup_output, intervals_output, realign_output, table_output])
 
 
