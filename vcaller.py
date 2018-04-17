@@ -314,8 +314,8 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
                     '-M', output_dir + smpl_name + '.metrics']
     if not check_existence([dup_output]):
         run(dup_args)
-        click.echo('Indexing %s...' % smpl_name)
-        run(['samtools', 'index', dup_output])
+    click.echo('Indexing %s...' % smpl_name)
+    run(['samtools', 'index', dup_output])
 
     # Realign around indels
     # Using gatk3 because of this
