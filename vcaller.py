@@ -297,21 +297,21 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
                        '-O', rg_output, '-RGID', read_groups['ID'], '-RGLB', read_groups['LB'],
                        '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM']]
             run(rg_args)
+        click.echo('Indexing %s...' % smpl_name)
+        run(['samtools', 'index', rg_output])
         dup_output = '.'.join(rg_output.split('.')[:-1]) + '.DUP' + smpl_extension
         click.echo('Marking and removing duplicates for %s...' % smpl_name)
         dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', rg_output,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
                     '-M', output_dir + smpl_name + '.metrics']
-        click.echo('Indexing %s...' % smpl_name)
-        run(['samtools', 'index', dup_output])
     else:
+        click.echo('Indexing %s...' % smpl_name)
+        run(['samtools', 'index', sample])
         dup_output = output_dir + smpl_name + '.DUP' + smpl_extension
         click.echo('Marking and removing duplicates for %s...' % smpl_name)
         dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', sample,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
                     '-M', output_dir + smpl_name + '.metrics']
-        click.echo('Indexing %s...' % smpl_name)
-        run(['samtools', 'index', dup_output])
     if not check_existence([dup_output]):
         run(dup_args)
         click.echo('Indexing %s...' % smpl_name)
