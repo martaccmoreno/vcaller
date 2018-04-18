@@ -107,7 +107,8 @@ def align_bwa(output, reference, read1, read2):
         run(index_args)
 
     output_basename = os.path.basename('.'.join(output.split('.')[:-1]))
-    sam_output = os.path.dirname(output) + output_basename + '.sam'
+    sam_output = os.path.dirname(output) + '/' + output_basename + '.sam'
+    click.echo(sam_output)
     if read2 is None:  # if read is single-ended
         align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', '.'.join(reference.split('.')[:-1]), read1,
                       '-S', sam_output]
