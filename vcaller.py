@@ -138,14 +138,12 @@ def call():
 @call.command('gatk')
 @click.option('--output', '-o', default='gatk_out.vcf',
               help='Name of the output file (extension will be added automatically)')
-@click.option('--known-snps', '-k', default=None, type=click.Path(exists=True), help='dbSNP file containing a database \
-                                                                                     of known SNPs to help improve \
-                                                                                     variant calling results.')
-@click.option('--clean-up', '-c', default=False, help='Clean up intermediary files to save disk space.')
+@click.option('--dbsnp', default=None, type=click.Path(exists=True), help='dbSNP file containing a database of '
+                                                                          'known SNPs.')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_gatk(output, known_snps, reference, sample1, sample2):
+def call_gatk(output, dbsnp, reference, sample1, sample2):
     """Call variants using GATK's HaplotypeCaller.
     The GATK's HaplotypeCaller algorithm is used to call variants on aligned sequence files (samples).
 
@@ -190,13 +188,13 @@ def call_gatk(output, known_snps, reference, sample1, sample2):
 
     # run GATK-HC
     click.echo('Calling variants on samples %s with GATK-HC...' % ', '.join(sample_list))
-    if known_snps is None:
+    if dbsnp is None:
         # each sample needs to be preceed by an -I so this is not working for more than one sample?
         gatk_args = [config['filePaths']['gatk4'], 'HaplotypeCaller', '-R', reference, '-I'] + sample_list + \
                     ['-O', output]
     else:
         gatk_args = [config['filePaths']['gatk4'], 'HaplotypeCaller', '-R', reference, '-I'] + sample_list + \
-                    ['--dbsnp', known_snps, '-O', output]
+                    ['--dbsnp', dbsnp, '-O', output]
     run(gatk_args)
 
 
