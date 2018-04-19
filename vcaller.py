@@ -362,7 +362,8 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         if readgroup_info is not None:
             click.echo('Cleaning up %s...' % ', '.join([rg_output, dup_output, intervals_output, realign_output,
                                                         table_output, output_dir + smpl_name + '.metrics']))
-            index_files = [item+'.bai' for item in [rg_output, dup_output, realign_output]]
+            index_files = [item+'.bai' for item in [rg_output, dup_output]]
+            index_files.append('.'.join(realign_output.split('.')[:-1])+'.bai')
             run(['rm', rg_output, dup_output, intervals_output, realign_output,
                  table_output, output_dir + smpl_name + '.metrics'] + index_files)
         else:
