@@ -27,6 +27,12 @@ Features
 - Be awesome
 - Make things faster
 
+Requirements
+------------
+
+Software requirements to run all vcaller features
+...
+
 Installation
 ------------
 
@@ -36,6 +42,40 @@ Install vcaller using virtualenv:
     $ virtualenv venv
     $ . venv/bin/activate
     $ pip install --editable .
+    
+Quickstart
+----------
+
+Examples for basic variant calling.
+
+**Aligning to the reference genome:**
+
+*Using bwa*
+
+    $ vcaller align bwa -o bwa_output.bam reference.fa read1.fastq.gz [read2.fastaq.gz]
+
+*Using Bowtie2*
+
+    $ vcaller align bowtie2 -o bt2_output.bam reference.fa read1.fastq.gz [read2.fastq.gz]
+    
+**Processing aligned reads:**
+
+    $ vcaller process -o processed_output.bam -d path/to/out/dir/ \
+    --read-group-info ID:id,PL:SEQUENCINGPLATFORM,PU:platformUnit,SM:sample,LB:library1 \
+    -i 1000G_indels.vcf.gz Mills_indels.vcf.gz dbsnp.vcf.gz reference.fa sample.bam
+
+(For more information on Read Group Information, see: 
+https://gatkforums.broadinstitute.org/gatk/discussion/6472/read-groups)
+
+(For more information on which known variant databases to use, see:
+https://software.broadinstitute.org/gatk/documentation/article.php?id=1247)
+
+**Calling Variants**
+
+*Using GATK4*
+
+    $ vcaller call gatk -o gatk_vars.vcf --dbsnp dbsnp.vcf reference.fa \
+    processed_sample.bam
 
 Contribute
 ----------
