@@ -30,8 +30,23 @@ Features
 Requirements
 ------------
 
-Software requirements to run all vcaller features
-...
+Software requirements to run all vcaller features:
+
+* Bowtie 2*
+(http://bowtie-bio.sourceforge.net/bowtie2/index.shtml)
+* GATK3*
+(https://software.broadinstitute.org/gatk/download/archive)
+* GATK4*
+(https://software.broadinstitute.org/gatk/download/)
+* Picard*
+(https://broadinstitute.github.io/picard/)
+* samtools + bcftools
+(http://www.htslib.org/download/)
+* TVC*
+(https://github.com/iontorrent/TS)
+
+
+Tools marked with a * must have their correct path defined in the config.json file.
 
 Installation
 ------------
