@@ -30,7 +30,7 @@ Features
 Requirements
 ------------
 
-Software requirements to run all vcaller features:
+Software required to run all vcaller features:
 
 * Bowtie 2*
 (http://bowtie-bio.sourceforge.net/bowtie2/index.shtml)
@@ -57,6 +57,12 @@ Install vcaller using virtualenv:
     $ virtualenv venv
     $ . venv/bin/activate
     $ pip install --editable .
+    
+Every time you wish to use vcaller command directly from your terminal,
+activate the created virtual environment:
+
+    $ . venv/bin/activate
+    $ vcaller --help
     
 Quickstart
 ----------
