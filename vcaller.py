@@ -180,7 +180,7 @@ def call_gatk(output, dbsnp, reference, sample1, sample2):
     sample_list = [sample1] + [s for s in sample2]
     click.echo(sample_list)
     for smpl in sample_list:
-        if check_existence(['.'.join(smpl.split('.')[:-1]) + '.bai']):
+        if check_existence(['.'.join(smpl.split('.')[:-1]) + '.bai']) or check_existence(smpl + '.bai'):
             click.echo('Sample index .bai files already exist!\nSkipping sample indexing.')
         else:
             click.echo('Need to generate sample index .bai file!\nIndexing sample file %s...' % smpl)
