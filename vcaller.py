@@ -178,13 +178,14 @@ def call_gatk(output, dbsnp, reference, sample1, sample2):
         run(dict_vars)
 
     sample_list = [sample1] + [s for s in sample2]
-    # samtools index on each SAMPLE
-    if check_existence([sample + '.bai' for sample in sample_list]):
-        click.echo('Sample index .bai files already exist!\nSkipping sample indexing.')
-    else:
-        click.echo('Need to generate sample index .bai files!\nIndexing sample files %s...' % ', '.join(sample_list))
-        index_args = ['samtools', 'index'] + sample_list
-        run(index_args)
+    click.echo(sample_list)
+    for smpl in sample_list:
+        if check_existence(['.'.join(smpl.split('.')[:-1]) + '.bai']):
+            click.echo('Sample index .bai files already exist!\nSkipping sample indexing.')
+        else:
+            click.echo('Need to generate sample index .bai file!\nIndexing sample file %s...' % smpl)
+            index_args = ['samtools', 'index', smpl]
+            run(index_args)
 
     # run GATK-HC
     click.echo('Calling variants on samples %s with GATK-HC...' % ', '.join(sample_list))
@@ -276,14 +277,12 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
 
     smpl_name, smpl_extension = '.'.join(os.path.basename(sample).split('.')[:-1]), sample.split('.')[-1]
     smpl_name = os.path.basename(smpl_name)
-    smpl_extension = '.'+smpl_extension
 
     # sort and convert SAM extension files to BAM
-    if smpl_extension.lower() is '.sam':
-        click.echo('Sorting and converting %s to BAM...' % sample)
-        sort_args = ['samtools', 'sort', '-O', 'bam', '-o', smpl_name + '.bam', '-T', '/tmp/'+smpl_name+'.temp', sample]
-        run(sort_args)
-        smpl_extension = '.bam'
+    click.echo('Sorting and converting %s to BAM...' % sample)
+    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', smpl_name + '.bam', '-T', '/tmp/'+smpl_name+'.temp', sample]
+    run(sort_args)
+    smpl_extension = '.bam'
 
     # More info on RGs: https://gatkforums.broadinstitute.org/gatk/discussion/6472/read-groups
     if readgroup_info is not None:
