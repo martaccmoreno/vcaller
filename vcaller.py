@@ -190,10 +190,11 @@ def call_gatk(output, dbsnp, reference, sample1, sample2):
     click.echo('Calling variants on samples %s with GATK-HC...' % ', '.join(sample_list))
     if dbsnp is None:
         # each sample needs to be preceed by an -I so this is not working for more than one sample?
-        gatk_args = [config['filePaths']['gatk4'], 'HaplotypeCaller', '-R', reference, '-I'] + sample_list + \
-                    ['-O', output]
+        gatk_args = [config['filePaths']['gatk4'], 'HaplotypeCaller', '-R', reference, '-I'] + \
+                    flatten_list([['-I'] + [sample_list[i]] for i in range(len(sample_list))]) + ['-O', output]
     else:
-        gatk_args = [config['filePaths']['gatk4'], 'HaplotypeCaller', '-R', reference, '-I'] + sample_list + \
+        gatk_args = [config['filePaths']['gatk4'], 'HaplotypeCaller', '-R', reference] + \
+                    flatten_list([['-I'] + [sample_list[i]] for i in range(len(sample_list))]) + \
                     ['--dbsnp', dbsnp, '-O', output]
     run(gatk_args)
 
