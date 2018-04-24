@@ -216,7 +216,7 @@ def call_bcftools(output, reference, sample1, sample2):
     """
 
     sample_list = [sample1] + [s for s in sample2]
-    bcf_output = 'bcftools_out.bcf'
+    bcf_output = '.'.join(output.split('.')[:-1])+'.bcf'
     # bcftools mpileup
     click.echo('Calculating genotype likelihoods for %s...' % ', '.join(sample_list))
     mpileup_args = ['bcftools', 'mpileup', '-Ob', '-o', bcf_output, '-f', reference] + sample_list
