@@ -202,7 +202,7 @@ def call_gatk(output, dbsnp, reference, sample1, sample2):
 
 @call.command('bcftools')
 @click.option('--output', '-o', default='bcftools_out.vcf',
-              help='Name of the output file (extension will be added automatically)')
+              help='Name of the output file.')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
@@ -230,6 +230,31 @@ def call_bcftools(output, reference, sample1, sample2):
     # clean up intermediary files
     click.echo('Cleaning up %s...' % bcf_output)
     run(['rm', bcf_output])
+
+
+@call.command('varscan2')
+@click.option('--output', '-o', default='bcftools_out.vcf', help='Name of the output file.')
+@click.argument('sample1', type=click.Path(exists=True))
+@click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
+def call_tvc(output, sample1, sample2):
+    """Call variants using Varscan2.
+
+    Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
+    are in the SAM/BAM format. A reference genome must be provided.
+    """
+
+    sample_list = [sample1] + [s for s in sample2]
+    click.echo('Creating mpipleup file using %s...' % ', '.join(sample_list))
+    mpileup_file = '.'.join(output.split('.')[:-1]) + '.pileup'
+    pileup_args = ['samtools', 'mpileup'] + sample_list
+    click.echo(pileup_args)
+    click.echo(mpileup_file)
+    with open(mpileup_file, "w") as pileup_out:
+        run(pileup_args, stdout=pileup_out)
+    click.echo('Calling variants on %s with Varscan2...' % mpileup_file)
+    call_args = ['java', '-jar', config['filePaths']['varscan2'], 'mpileup2cns', mpileup_file, '--output-vcf', '1']
+    with open(output, "w") as call_out:
+        run(call_args, stdout=call_out)
 
 
 @call.command('tvc')
