@@ -256,6 +256,9 @@ def call_tvc(output, sample1, sample2):
     with open(output, "w") as call_out:
         run(call_args, stdout=call_out)
 
+    click.echo('Cleaning up %s...' % mpileup_file)
+    run(['rm', mpileup_file])
+
 
 @call.command('tvc')
 @click.option('--output-dir', '-d', default='.',
