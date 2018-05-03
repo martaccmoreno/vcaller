@@ -309,6 +309,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
     smpl_name = os.path.basename(smpl_name)
 
     # sort and convert SAM extension files to BAM
+    # a big bother when we need to re-run especially on big files think of an alternative
     click.echo('Sorting and converting %s to BAM...' % sample)
     sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output_dir + smpl_name + '.bam', '-T', '/tmp/'+smpl_name+'.temp', sample]
     run(sort_args)
@@ -336,7 +337,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
                     '-M', output_dir + smpl_name + '.metrics']
     else:
         click.echo('Indexing %s...' % smpl_name)
-        run(['samtools', 'index', sample])
+        run(['samtools', 'index', output_dir + smpl_name + '.bam'])
         dup_output = output_dir + smpl_name + '.DUP' + smpl_extension
         click.echo('Marking and removing duplicates for %s...' % smpl_name)
         dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', sample,
