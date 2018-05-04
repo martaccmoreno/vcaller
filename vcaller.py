@@ -263,21 +263,26 @@ def call_tvc(output, reference, sample1, sample2):
 
 
 @call.command('tvc')
-@click.option('--output-dir', '-d', default='.',
+@click.option('--output-dir', '-o', default='.',
               help='Name of output directory; by default save to current directory.')
+@click.option('--target-file', '-t', default=None,
+              help='Only process targets in given bed file')
 @click.argument('reference', type=click.Path(exists=True))
-@click.argument('sample1', type=click.Path(exists=True))
-@click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_tvc(output_dir, reference, sample1, sample2):
+@click.argument('sample', type=click.Path(exists=True))
+def call_tvc(output_dir, target_file, reference, sample):
     """Call variants using TorrentVariantCaller (TVC).
 
-    Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
-    are in the SAM/BAM format. A reference genome must be provided.
+    Only one sample sequence file can be specified. Sample sequence must have been previously aligned, so that it is
+    in the SAM/BAM format. A reference genome must be provided.
     """
 
-    sample_list = [sample1] + [s for s in sample2]
-    click.echo('Calling variants on %s with TVC...' % ', '.join(sample_list))
-    call_args = [config['filePaths']['tvc'], '-i', ','.join(sample_list), '-r', reference, '-o', output_dir]
+    click.echo('Calling variants on %s with TVC...' % sample)
+    if target_file is None:
+        call_args = [config['filePaths']['tvc'], '-i', sample, '-r', reference, '-o', output_dir]
+    else:
+        call_args = [config['filePaths']['tvc'], '-i', sample, '-r', reference, '-b', target_file,
+                     '-o', output_dir]
+    click.echo(call_args)
     run(call_args)
 
 
@@ -387,6 +392,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         run(bqsr_args)
 
     # clean up intermediary files -- but only after we have the final file
+    # still not working 100%
     if check_existence([bqsr_output]):
         if readgroup_info is not None:
             click.echo('Cleaning up %s...' % ', '.join([rg_output, dup_output, intervals_output, realign_output,
