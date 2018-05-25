@@ -21,6 +21,9 @@ What follows is an example pipeline that calls variants on Illumina data:
 The final output will be a VCF file containing the called variants.
 Intermediary step files, while usually cleaned, may optionally be kept.
 
+Vcaller has been tested on a server running Ubuntu 16.04.4 LTS and a laptop
+running Linux Mint 18.2 Sonya.
+
 Features
 --------
 

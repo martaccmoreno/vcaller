@@ -248,13 +248,11 @@ def call_tvc(output, reference, sample1, sample2):
     click.echo('Creating mpipleup file using %s...' % ', '.join(sample_list))
     mpileup_file = '.'.join(output.split('.')[:-1]) + '.pileup'
     pileup_args = ['samtools', 'mpileup', '-f', reference] + sample_list
-    click.echo(pileup_args)
-    click.echo(mpileup_file)
     with open(mpileup_file, "w") as pileup_out:
         run(pileup_args, stdout=pileup_out)
     click.echo('Calling variants on %s with Varscan2...' % mpileup_file)
     call_args = ['java', '-jar', config['filePaths']['varscan2'], 'mpileup2cns', mpileup_file, '--output-vcf', '1',
-                 '--variants', '1', '--p-value', '0.10']
+                 '--variants', '1', '--p-value', '0.10', '--min-coverage', '2']
     with open(output, "w") as call_out:
         run(call_args, stdout=call_out)
 
