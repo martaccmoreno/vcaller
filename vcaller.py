@@ -1,6 +1,6 @@
 import json
 import os
-from subprocess import run
+from subprocess import run, getstatusoutput
 
 import click
 
@@ -23,6 +23,10 @@ def check_existence(filename_list):
 def flatten_list(list_of_list):
     "Flatten a list of list into a single list."
     return [item for sublist in list_of_list for item in sublist]
+
+def check_sort(bam_file):
+    getstatusoutput
+
 
 
 ##### MAIN GROUP #####
@@ -311,11 +315,12 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
     smpl_name = os.path.basename(smpl_name)
 
     # sort and convert SAM extension files to BAM
-    # a big bother when we need to re-run especially on big files think of an alternative
-    click.echo('Sorting and converting %s to BAM...' % sample)
-    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output_dir + smpl_name + '.bam', '-T', '/tmp/'+smpl_name+'.temp', sample]
-    run(sort_args)
-    smpl_extension = '.bam'
+    if (smpl_extension is not '.bam') or (getstatusoutput('samtools index '+sample)[0] != 0):
+        click.echo('Sorting and converting %s to BAM...' % sample)
+        sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output_dir + smpl_name + '.bam', '-T', '/tmp/'+smpl_name+'.temp', sample]
+        run(sort_args)
+        smpl_extension = '.bam'
+        run(['rm', sample+'.bai'])
 
     # More info on RGs: https://gatkforums.broadinstitute.org/gatk/discussion/6472/read-groups
     if readgroup_info is None:
@@ -327,7 +332,6 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
                     '-M', output_dir + smpl_name + '.metrics']
     else:
-        click.echo('Read group on')
         rg_output = output_dir + smpl_name + '.RG' + smpl_extension
         if not check_existence([rg_output]):
             click.echo('Adding Read Group information to %s...' % sample)
