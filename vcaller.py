@@ -318,7 +318,16 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
     smpl_extension = '.bam'
 
     # More info on RGs: https://gatkforums.broadinstitute.org/gatk/discussion/6472/read-groups
-    if readgroup_info is not None:
+    if readgroup_info is None:
+        click.echo('Indexing %s...' % smpl_name)
+        run(['samtools', 'index', output_dir + smpl_name + '.bam'])
+        dup_output = output_dir + smpl_name + '.DUP' + smpl_extension
+        click.echo('Marking and removing duplicates for %s...' % smpl_name)
+        dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', sample,
+                    '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
+                    '-M', output_dir + smpl_name + '.metrics']
+    else:
+        click.echo('Read group on')
         rg_output = output_dir + smpl_name + '.RG' + smpl_extension
         if not check_existence([rg_output]):
             click.echo('Adding Read Group information to %s...' % sample)
@@ -333,19 +342,12 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         click.echo('Indexing %s...' % smpl_name)
         run(['samtools', 'index', rg_output])
         dup_output = '.'.join(rg_output.split('.')[:-1]) + '.DUP' + smpl_extension
-        click.echo('Marking and removing duplicates for %s...' % smpl_name)
         dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', rg_output,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
                     '-M', output_dir + smpl_name + '.metrics']
-    else:
-        click.echo('Indexing %s...' % smpl_name)
-        run(['samtools', 'index', output_dir + smpl_name + '.bam'])
-        dup_output = output_dir + smpl_name + '.DUP' + smpl_extension
-        click.echo('Marking and removing duplicates for %s...' % smpl_name)
-        dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', sample,
-                    '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
-                    '-M', output_dir + smpl_name + '.metrics']
+
     if not check_existence([dup_output]):
+        click.echo('Marking and removing duplicates for %s...' % smpl_name)
         run(dup_args)
     click.echo('Indexing %s...' % smpl_name)
     run(['samtools', 'index', dup_output])
