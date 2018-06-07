@@ -312,15 +312,17 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
 
     # sort and convert SAM extension files to BAM
     sorted_output = os.path.join(output_dir, smpl_name + smpl_extension)
-    if ((smpl_extension is not '.bam') or (getstatusoutput('samtools index '+sample)[0] != 0)) \
-        and not check_existence([sorted_output]):
-        click.echo('Sorting and converting %s to BAM...' % sample)
-        sort_args = ['samtools', 'sort', '-O', 'bam', '-o', sorted_output , '-T',
-                     os.path.join('/tmp/',smpl_name+'.temp'), sample]
-        run(sort_args)
-        run(['rm', sample+'.bai'])
-        click.echo('Indexing %s...' % smpl_name)
-        run(['samtools', 'index', sorted_output])
+    if ((smpl_extension is not '.bam') or (getstatusoutput('samtools index '+sample)[0] != 0)):
+        sample = sorted_output
+        if not check_existence([sorted_output]):
+            click.echo('Sorting and converting %s to BAM...' % sample)
+            sort_args = ['samtools', 'sort', '-O', 'bam', '-o', sorted_output, '-T',
+                         os.path.join('/tmp/', smpl_name+'.temp'), sample]
+            run(sort_args)
+            run(['rm', sample+'.bai'])
+            click.echo('Indexing %s...' % smpl_name)
+            run(['samtools', 'index', sorted_output])
+
 
     # dedupping
     dup_output = os.path.join(output_dir, smpl_name + '.DUP' + smpl_extension)
