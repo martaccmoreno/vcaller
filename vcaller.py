@@ -311,14 +311,14 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
     """Performs a group of steps for the post-processing in preparation for variant calling
     on one SAM/BAM sampl file. A must do for running the gatk subcommand under call."""
 
-    smpl_name, smpl_extension = '.'.join(os.path.basename(sample).split('.')[:-1]), sample.split('.')[-1]
-    smpl_name = os.path.basename(smpl_name)
+    smpl_name = os.path.basename('.'.join(os.path.basename(sample).split('.')[:-1]))
+    smpl_extension = '.bam'
 
     # sort and convert SAM extension files to BAM
-    if (smpl_extension is not '.bam') or (getstatusoutput('samtools index '+sample)[0] != 0):
+    sorted_output = os.path.join(output_dir, smpl_name + smpl_extension)
+    if ((smpl_extension is not '.bam') or (getstatusoutput('samtools index '+sample)[0] != 0)) \
+        and not check_existence([sorted_output]):
         click.echo('Sorting and converting %s to BAM...' % sample)
-        smpl_extension = '.bam'
-        sorted_output = os.path.join(output_dir, smpl_name + smpl_extension)
         sort_args = ['samtools', 'sort', '-O', 'bam', '-o', sorted_output , '-T',
                      os.path.join('/tmp/',smpl_name+'.temp'), sample]
         run(sort_args)
