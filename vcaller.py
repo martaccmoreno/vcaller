@@ -307,13 +307,11 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
     """Performs a group of steps for the post-processing in preparation for variant calling
     on one SAM/BAM sampl file. A must do for running the gatk subcommand under call."""
 
-    smpl_name = os.path.basename('.'.join(os.path.basename(sample).split('.')[:-1]))
-    smpl_extension = '.bam'
+    smpl_name, smpl_extension = '.'.join(os.path.basename(sample).split('.')[:-1]), sample.split('.')[-1]
 
     # sort and convert SAM extension files to BAM
     if ((smpl_extension is not '.bam') or (getstatusoutput('samtools index '+sample)[0] != 0)):
-        sorted_output = os.path.join(output_dir, smpl_name + smpl_extension)
-        sample = sorted_output
+        sorted_output = os.path.join(output_dir, smpl_name + '.bam')
         if not check_existence([sorted_output]):
             click.echo('Sorting and converting %s to BAM...' % sample)
             sort_args = ['samtools', 'sort', '-O', 'bam', '-o', sorted_output, '-T',
@@ -322,6 +320,8 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
             run(['rm', sample+'.bai'])
             click.echo('Indexing %s...' % smpl_name)
             run(['samtools', 'index', sorted_output])
+            smpl_extension = '.bam'
+        sample = sorted_output
 
 
     # dedupping
@@ -393,6 +393,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         bqsr_args = [config['filePaths']['gatk4'], 'ApplyBQSR',
                      '-I', realign_output, '-bqsr', table_output, '-O', bqsr_output]
         run(bqsr_args)
+        run(['samtools', 'index', bqsr_output])
 
     # clean up intermediary files -- but only after we have the final file
     # still not working 100%
@@ -407,7 +408,8 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         else:
             index_files = [item+'.bai' for item in [dup_output, realign_output]]
             click.echo('Cleaning up %s...' % ', '.join([dup_output, intervals_output, realign_output,
-                                                    table_output, output_dir + smpl_name + '.metrics'] + index_files))
+                                                    table_output, os.path.join(output_dir, smpl_name + '.metrics')]
+                                                       + index_files))
             run(['rm', dup_output, intervals_output, realign_output, table_output])
 
 
