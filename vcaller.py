@@ -317,22 +317,25 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
     # sort and convert SAM extension files to BAM
     if (smpl_extension is not '.bam') or (getstatusoutput('samtools index '+sample)[0] != 0):
         click.echo('Sorting and converting %s to BAM...' % sample)
-        sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output_dir + smpl_name + '.bam', '-T', '/tmp/'+smpl_name+'.temp', sample]
-        run(sort_args)
         smpl_extension = '.bam'
+        sorted_output = os.path.join(output_dir, smpl_name + smpl_extension)
+        sort_args = ['samtools', 'sort', '-O', 'bam', '-o', sorted_output , '-T',
+                     os.path.join('/tmp/',smpl_name+'.temp'), sample]
+        run(sort_args)
+
         run(['rm', sample+'.bai'])
 
     # More info on RGs: https://gatkforums.broadinstitute.org/gatk/discussion/6472/read-groups
     if readgroup_info is None:
         click.echo('Indexing %s...' % smpl_name)
-        run(['samtools', 'index', output_dir + smpl_name + '.bam'])
-        dup_output = output_dir + smpl_name + '.DUP' + smpl_extension
+        run(['samtools', 'index', sorted_output])
+        dup_output = os.path.join(output_dir, smpl_name + '.DUP' + smpl_extension)
         click.echo('Marking and removing duplicates for %s...' % smpl_name)
         dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', sample,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
-                    '-M', output_dir + smpl_name + '.metrics']
+                    '-M', os.path.join(output_dir, smpl_name + '.metrics')]
     else:
-        rg_output = output_dir + smpl_name + '.RG' + smpl_extension
+        rg_output = os.path.join(output_dir, smpl_name + '.RG' + smpl_extension)
         if not check_existence([rg_output]):
             click.echo('Adding Read Group information to %s...' % sample)
             rg_info = readgroup_info.split(',')
@@ -348,7 +351,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         dup_output = '.'.join(rg_output.split('.')[:-1]) + '.DUP' + smpl_extension
         dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', rg_output,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
-                    '-M', output_dir + smpl_name + '.metrics']
+                    '-M', os.path.join(output_dir, smpl_name + '.metrics')]
 
     if not check_existence([dup_output]):
         click.echo('Marking and removing duplicates for %s...' % smpl_name)
@@ -359,7 +362,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
     # Realign around indels
     # Using gatk3 because of this
     # https://gatkforums.broadinstitute.org/gatk/discussion/11455/realignertargetcreator-and-indelrealigner
-    intervals_output = output_dir + smpl_name + '.intervals'
+    intervals_output = os.path.join(output_dir, smpl_name + '.intervals')
     if not check_existence([intervals_output]):
         click.echo('Creating indel realignment intervals for %s...' % smpl_name)
         intervals_args = ['java', '-jar', config['filePaths']['gatk3'], '-T', 'RealignerTargetCreator', '-R', reference,
@@ -376,7 +379,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         run(realign_args)
 
     # BQSR
-    table_output = output_dir + smpl_name + '.table'
+    table_output = os.path.join(output_dir, smpl_name + '.table')
     if not check_existence([table_output]):
         click.echo('Creating base score recalibration table for %s...' % smpl_name)
         table_args = [config['filePaths']['gatk4'], 'BaseRecalibrator', '-R', reference,
@@ -385,7 +388,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
                      ['-I', realign_output, '-O', table_output]
         run(table_args)
     if output_name is None:
-        bqsr_output = output_dir + smpl_name + '.processed' + smpl_extension
+        bqsr_output = os.path.join(output_dir, smpl_name + '.processed' + smpl_extension)
     else:
         bqsr_output = output_name
     if not check_existence([bqsr_output]):
