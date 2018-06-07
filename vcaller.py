@@ -24,10 +24,6 @@ def flatten_list(list_of_list):
     "Flatten a list of list into a single list."
     return [item for sublist in list_of_list for item in sublist]
 
-def check_sort(bam_file):
-    getstatusoutput
-
-
 
 ##### MAIN GROUP #####
 @click.group()
@@ -430,12 +426,3 @@ def tabix(gzipped_files):
             run(['bgzip', file])
             click.echo('Indexing file %s using tabix....' % file)
             run(['tabix', file+'.gz'])
-
-
-##### FILTERING #####
-@cli.command('filter', short_help='Filter variants in a vcf file.')
-@click.argument('reference', required=True)
-@click.argument('variants', required=True, type=click.Path(exists=True), nargs=-1)
-def process(reference, variants):
-    """Desc"""
-    variant_list = list(variants)
