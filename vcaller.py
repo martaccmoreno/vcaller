@@ -311,8 +311,8 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
     smpl_extension = '.bam'
 
     # sort and convert SAM extension files to BAM
-    sorted_output = os.path.join(output_dir, smpl_name + smpl_extension)
     if ((smpl_extension is not '.bam') or (getstatusoutput('samtools index '+sample)[0] != 0)):
+        sorted_output = os.path.join(output_dir, smpl_name + smpl_extension)
         sample = sorted_output
         if not check_existence([sorted_output]):
             click.echo('Sorting and converting %s to BAM...' % sample)
@@ -340,7 +340,8 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
                            'LB': rg_info[4].split(':')[1]}
             rg_args = [config['filePaths']['gatk4'], 'AddOrReplaceReadGroups', '-I', sample,
                        '-O', rg_output, '-RGID', read_groups['ID'], '-RGLB', read_groups['LB'],
-                       '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM']]
+                       '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM'],
+                       '-SO', 'coordinate']
             run(rg_args)
         click.echo('Indexing %s...' % smpl_name)
         run(['samtools', 'index', rg_output])
