@@ -307,7 +307,13 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
     """Performs a group of steps for the post-processing in preparation for variant calling
     on one SAM/BAM sampl file. A must do for running the gatk subcommand under call."""
 
-    smpl_name, smpl_extension = '.'.join(os.path.basename(sample).split('.')[:-1]), sample.split('.')[-1]
+    smpl_name, smpl_extension = '.'.join(os.path.basename(sample).split('.')[:-1]), '.' + sample.split('.')[-1]
+
+    # prep reference genome
+    if not check_existence([reference+'.fai']):
+        run(['samtools', 'faidx', reference])
+    if not check_existence(['.'.join(reference.split('.'))[:-1]+'.dict']):
+        run(['gatk', 'CreateSequenceDictionary', '-R', reference])
 
     # sort and convert SAM extension files to BAM
     if ((smpl_extension is not '.bam') or (getstatusoutput('samtools index '+sample)[0] != 0)):
@@ -317,12 +323,13 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
             sort_args = ['samtools', 'sort', '-O', 'bam', '-o', sorted_output, '-T',
                          os.path.join('/tmp/', smpl_name+'.temp'), sample]
             run(sort_args)
-            run(['rm', sample+'.bai'])
             click.echo('Indexing %s...' % smpl_name)
             run(['samtools', 'index', sorted_output])
-            smpl_extension = '.bam'
+        smpl_extension = '.bam'
         sample = sorted_output
 
+    if check_existence([sample+'.bai']): # to avoid unnecessary 'file not found' errors
+        run(['rm', sample+'.bai'])
 
     # dedupping
     dup_output = os.path.join(output_dir, smpl_name + '.DUP' + smpl_extension)
@@ -343,8 +350,9 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
                        '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM'],
                        '-SO', 'coordinate']
             run(rg_args)
-        click.echo('Indexing %s...' % smpl_name)
-        run(['samtools', 'index', rg_output])
+        if not check_existence([rg_output+'.bai']):
+            click.echo('Indexing %s...' % smpl_name)
+            run(['samtools', 'index', rg_output])
         dup_output = '.'.join(rg_output.split('.')[:-1]) + '.DUP' + smpl_extension
         dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', rg_output,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
@@ -353,8 +361,9 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
     if not check_existence([dup_output]):
         click.echo('Marking and removing duplicates for %s...' % smpl_name)
         run(dup_args)
-    click.echo('Indexing %s...' % smpl_name)
-    run(['samtools', 'index', dup_output])
+    if not check_existence([dup_output+'.bai']):
+        click.echo('Indexing %s...' % smpl_name)
+        run(['samtools', 'index', dup_output])
 
     # Realign around indels
     # Using gatk3 because of this
