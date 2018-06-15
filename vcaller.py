@@ -92,7 +92,7 @@ def align_bwa(output, nthreads, reference, read1, read2):
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('read1', type=click.Path(exists=True))
 @click.argument('read2', required=False, type=click.Path(exists=True))
-def align_bwa(output, reference, read1, read2):
+def align_bowtie2(output, reference, read1, read2):
     """Use the FM-index tool bowtie2 for alignment. Requires bowtie2.
     It is only mandatory to include the reference genome file and a sample read as arguments.
     If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
@@ -108,7 +108,6 @@ def align_bwa(output, reference, read1, read2):
 
     output_basename = os.path.basename('.'.join(output.split('.')[:-1]))
     sam_output = os.path.dirname(output) + '/' + output_basename + '.sam'
-    click.echo(sam_output)
     if read2 is None:  # if read is single-ended
         align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', '.'.join(reference.split('.')[:-1]), read1,
                       '-S', sam_output]
@@ -127,6 +126,42 @@ def align_bwa(output, reference, read1, read2):
     # clean up intermediary files
     click.echo('Cleaning up %s...' % sam_output)
     run(['rm', sam_output])
+
+
+@align.command('tmap')
+@click.option('--output', '-o', default='tmap_output.bam', # output will have to be redirected
+              help='Name of the output file (extension will be added automatically)')
+@click.argument('reference', type=click.Path(exists=True))
+@click.argument('read1', type=click.Path(exists=True))
+@click.argument('read2', required=False, type=click.Path(exists=True))
+def align_tmap(output, reference, read1, read2):
+    """Use the Ion Torrent-specific aligner TMAP.
+    It is only mandatory to include the reference genome file and the reads of a sample as arguments.
+    If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
+
+    # add check to gunzip if gzipped
+    suffix_list = ['.tmap.anno', '.tmap.bwt', '.tmap.pac', '.tmap.sa']
+    suffixes = [reference + suffix for suffix in suffix_list]
+    if check_existence(suffixes):
+        click.echo('Index files already exist!\n Skipping reference genome indexing.')
+    else:
+        click.echo('Need to generate index files!\n Indexing reference genome %s...' % reference)
+        index_args = [config['filePaths']['tmap'], 'index', '-f', reference]
+        run(index_args)
+
+    if read2 is None:  # if read is single-ended
+        align_args = [config['filePaths']['tmap'], 'map1', '-f', reference, '-r', read1, '-o', '1']
+        if 'gz' in read1.split('.'): align_args = align_args + ['--input-gz']
+        click.echo('Aligning read %s against the reference genome...' % read1)
+        with open(output, "w") as align_out:
+            run(align_args, stdout=align_out)
+    else:  # if paired_end
+        align_args = [config['filePaths']['tmap'], 'map1','-f', reference, '-r', read1, '-r', read2, '-o', '1']
+        if 'gz' in read1.split('.') and 'gz' in read2.split('.'): align_args = align_args + ['--input-gz']
+        else: click.echo('Ensure that both read pairs are gzipped.') # needs proper exception handling
+        click.echo('Aligning reads %s %s against the reference genome...' % (read1, read2))
+        with open(output, "w") as align_out:
+            run(align_args, stdout=align_out)
 
 
 ##### VARIANT CALLING #####
@@ -262,8 +297,6 @@ def call_tvc(output, reference, sample1, sample2):
 @call.command('tvc')
 @click.option('--output-dir', '-o', default='.',
               help='Name of output directory; by default save to current directory.')
-@click.option('--target-file', '-t', default=None,
-              help='Only process targets in given bed file')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample', type=click.Path(exists=True))
 def call_tvc(output_dir, target_file, reference, sample):
@@ -279,7 +312,6 @@ def call_tvc(output_dir, target_file, reference, sample):
     else:
         call_args = [config['filePaths']['tvc'], '-i', sample, '-r', reference, '-b', target_file,
                      '-o', output_dir]
-    click.echo(call_args)
     run(call_args)
 
 
@@ -311,9 +343,11 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
 
     # prep reference genome
     if not check_existence([reference+'.fai']):
+        click.echo('Generating faidx index for %s...' % reference)
         run(['samtools', 'faidx', reference])
-    if not check_existence(['.'.join(reference.split('.'))[:-1]+'.dict']):
-        run(['gatk', 'CreateSequenceDictionary', '-R', reference])
+    if not check_existence(['.'.join(reference.split('.')[:-1])+'.dict']):
+        click.echo('Generating sequence dictionary for %s...' % reference)
+        run([config['filePaths']['gatk4'], 'CreateSequenceDictionary', '-R', reference])
 
     # sort and convert SAM extension files to BAM
     if ((smpl_extension is not '.bam') or (getstatusoutput('samtools index '+sample)[0] != 0)):
@@ -405,21 +439,21 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         run(['samtools', 'index', bqsr_output])
 
     # clean up intermediary files -- but only after we have the final file
-    # still not working 100%
-    if check_existence([bqsr_output]):
-        if readgroup_info is not None:
-            click.echo('Cleaning up %s...' % ', '.join([rg_output, dup_output, intervals_output, realign_output,
-                                                        table_output, output_dir + smpl_name + '.metrics']))
-            index_files = [item+'.bai' for item in [rg_output, dup_output]]
-            index_files.append('.'.join(realign_output.split('.')[:-1])+'.bai')
-            run(['rm', rg_output, dup_output, intervals_output, realign_output,
-                 table_output, output_dir + smpl_name + '.metrics'] + index_files)
-        else:
-            index_files = [item+'.bai' for item in [dup_output, realign_output]]
-            click.echo('Cleaning up %s...' % ', '.join([dup_output, intervals_output, realign_output,
-                                                    table_output, os.path.join(output_dir, smpl_name + '.metrics')]
-                                                       + index_files))
-            run(['rm', dup_output, intervals_output, realign_output, table_output])
+    # still not working 100% -- IT STILL RUNS EVEN IF BSQR WASN'T SUCCESSFUL
+    # if check_existence([bqsr_output]):
+    #     if readgroup_info is not None:
+    #         click.echo('Cleaning up %s...' % ', '.join([rg_output, dup_output, intervals_output, realign_output,
+    #                                                     table_output, output_dir + smpl_name + '.metrics']))
+    #         index_files = [item+'.bai' for item in [rg_output, dup_output]]
+    #         index_files.append('.'.join(realign_output.split('.')[:-1])+'.bai')
+    #         run(['rm', rg_output, dup_output, intervals_output, realign_output,
+    #              table_output, output_dir + smpl_name + '.metrics'] + index_files)
+    #     else:
+    #         index_files = [item+'.bai' for item in [dup_output, realign_output]]
+    #         click.echo('Cleaning up %s...' % ', '.join([dup_output, intervals_output, realign_output,
+    #                                                 table_output, os.path.join(output_dir, smpl_name + '.metrics')]
+    #                                                    + index_files))
+    #         run(['rm', dup_output, intervals_output, realign_output, table_output])
 
 
 ##### PREP #####
