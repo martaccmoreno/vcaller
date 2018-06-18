@@ -1,13 +1,12 @@
 import json
 import os
 from subprocess import run, getstatusoutput
-
 import click
 
 ##### IMPORT CONFIG #####
 # find where the script directory is (=/= working directory)
 current_dir = os.path.dirname(os.path.abspath(__file__))
-with open(os.path.join(current_dir, 'config.json')) as data_file:
+with open(os.path.join(current_dir, 'config.json'), 'r') as data_file:
     config = json.load(data_file)
 
 
@@ -72,7 +71,7 @@ def align_bwa(output, nthreads, reference, read1, read2):
         align_args = ['bwa', 'mem', '-M', '-t', nthreads, reference, read1]
         if read2 is not None:
             align_args += [read2]
-        with open(sam_output, "w") as align_out:
+        with open(sam_output, "w+") as align_out:
             run(align_args, stdout=align_out)
 
     # Sort and convert to BAM
@@ -150,17 +149,17 @@ def align_tmap(output, reference, read1, read2):
         run(index_args)
 
     if read2 is None:  # if read is single-ended
-        align_args = [config['filePaths']['tmap'], 'map1', '-f', reference, '-r', read1, '-o', '1']
+        align_args = [config['filePaths']['tmap'], 'map1', '-f', reference, '-r', read1, '-o', '2']
         if 'gz' in read1.split('.'): align_args = align_args + ['--input-gz']
         click.echo('Aligning read %s against the reference genome...' % read1)
-        with open(output, "w") as align_out:
+        with open(output, "w+") as align_out:
             run(align_args, stdout=align_out)
     else:  # if paired_end
-        align_args = [config['filePaths']['tmap'], 'map1','-f', reference, '-r', read1, '-r', read2, '-o', '1']
+        align_args = [config['filePaths']['tmap'], 'map1','-f', reference, '-r', read1, '-r', read2, '-o', '2']
         if 'gz' in read1.split('.') and 'gz' in read2.split('.'): align_args = align_args + ['--input-gz']
         else: click.echo('Ensure that both read pairs are gzipped.') # needs proper exception handling
         click.echo('Aligning reads %s %s against the reference genome...' % (read1, read2))
-        with open(output, "w") as align_out:
+        with open(output, "w+") as align_out:
             run(align_args, stdout=align_out)
 
 
@@ -282,12 +281,12 @@ def call_tvc(output, reference, sample1, sample2):
     click.echo('Creating mpipleup file using %s...' % ', '.join(sample_list))
     mpileup_file = '.'.join(output.split('.')[:-1]) + '.pileup'
     pileup_args = ['samtools', 'mpileup', '-f', reference] + sample_list
-    with open(mpileup_file, "w") as pileup_out:
+    with open(mpileup_file, "w+") as pileup_out:
         run(pileup_args, stdout=pileup_out)
     click.echo('Calling variants on %s with Varscan2...' % mpileup_file)
     call_args = ['java', '-jar', config['filePaths']['varscan2'], 'mpileup2cns', mpileup_file, '--output-vcf', '1',
                  '--variants', '1', '--p-value', '0.10', '--min-coverage', '2']
-    with open(output, "w") as call_out:
+    with open(output, "w+") as call_out:
         run(call_args, stdout=call_out)
 
     click.echo('Cleaning up %s...' % mpileup_file)
@@ -297,6 +296,8 @@ def call_tvc(output, reference, sample1, sample2):
 @call.command('tvc')
 @click.option('--output-dir', '-o', default='.',
               help='Name of output directory; by default save to current directory.')
+@click.option('--target-file', '-t', default=None,
+              help='Only process targets in given bed file')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample', type=click.Path(exists=True))
 def call_tvc(output_dir, target_file, reference, sample):
