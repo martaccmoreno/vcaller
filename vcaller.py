@@ -13,6 +13,7 @@ with open(os.path.join(current_dir, 'config.json'), 'r') as data_file:
 ##### AUXILIARY FUNCTIONS #####
 def check_existence(filename_list):
     """Check if files with the filenames in the list already exist in the working directory."""
+    if type(filename_list) is str: filename_list = [filename_list]
     if sum([os.path.isfile(ifile) for ifile in filename_list]) == len(filename_list):
         return True
     else:
@@ -20,9 +21,41 @@ def check_existence(filename_list):
 
 
 def flatten_list(list_of_list):
-    "Flatten a list of list into a single list."
+    """Flatten a list of list into a single list."""
     return [item for sublist in list_of_list for item in sublist]
 
+
+def remove_suffix(file_name):
+    """Remove the suffix of a filename, e.g. 'reference.fa' becomes 'reference'"""
+    return '.'.join(file_name.split('.')[:-1])
+
+def replace_suffix(file_name, new_suffix):
+    """
+    Replaces the suffix in a file's name with another user-specified suffix. For example:
+    file_name: 'reference.fa'
+    new_suffix:  '.fasta'
+    return: 'reference.fasta
+    '"""
+    if new_suffix[0] == '.':
+        return remove_suffix(file_name) + new_suffix
+    else:
+        return remove_suffix(file_name) + '.' + new_suffix
+
+def tabix_index(gzipped_files):
+    if type(gzipped_files) is str: gzipped_files = [gzipped_files]
+    for file in gzipped_files:
+        if '.gz' in file:
+            click.echo('Gunzipping %s...' % file)
+            run(['gunzip', file])
+            click.echo('Compressing file %s using bgzip...' % file)
+            run(['bgzip', remove_suffix(file)])
+            click.echo('Indexing file %s using tabix....' % file)
+            run(['tabix', file])
+        else:
+            click.echo('Compressing file %s using bgzip...' % file)
+            run(['bgzip', file])
+            click.echo('Indexing file %s using tabix....' % file)
+            run(['tabix', file+'.gz'])
 
 ##### MAIN GROUP #####
 @click.group()
@@ -61,8 +94,7 @@ def align_bwa(output, nthreads, reference, read1, read2):
         run(['bwa', 'index', reference])
 
     # Align input sequences to the reference genome
-    output_name = '.'.join(output.split('.')[:-1])
-    sam_output = output_name + '.sam'
+    sam_output = replace_suffix(output, 'sam')
     if check_existence([sam_output]):
         click.echo('Aligned SAM read file already exists!')
     else:
@@ -281,12 +313,12 @@ def call_tvc(output, reference, sample1, sample2):
     click.echo('Creating mpipleup file using %s...' % ', '.join(sample_list))
     mpileup_file = '.'.join(output.split('.')[:-1]) + '.pileup'
     pileup_args = ['samtools', 'mpileup', '-f', reference] + sample_list
-    with open(mpileup_file, "w+") as pileup_out:
+    with open(mpileup_file, 'w+') as pileup_out:
         run(pileup_args, stdout=pileup_out)
     click.echo('Calling variants on %s with Varscan2...' % mpileup_file)
     call_args = ['java', '-jar', config['filePaths']['varscan2'], 'mpileup2cns', mpileup_file, '--output-vcf', '1',
                  '--variants', '1', '--p-value', '0.10', '--min-coverage', '2']
-    with open(output, "w+") as call_out:
+    with open(output, 'w+') as call_out:
         run(call_args, stdout=call_out)
 
     click.echo('Cleaning up %s...' % mpileup_file)
@@ -314,6 +346,29 @@ def call_tvc(output_dir, target_file, reference, sample):
         call_args = [config['filePaths']['tvc'], '-i', sample, '-r', reference, '-b', target_file,
                      '-o', output_dir]
     run(call_args)
+
+@call.command('freebayes')
+@click.option('--output', '-o', default='freebayes_out.vcf',
+              help='Name of the output file.')
+@click.argument('reference', type=click.Path(exists=True))
+@click.argument('sample1', type=click.Path(exists=True))
+@click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
+def call_freebayes(output, reference, sample1, sample2):
+    """Call variants using SAMtools's BCFtools.
+
+    This command calls variants on input aligned sequence files (samples) after calculating their genotype likelihoods.
+
+    Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
+    are in the SAM/BAM format. A reference genome must be provided.
+    """
+
+    sample_list = [sample1] + [s for s in sample2]
+
+    options = ['-m', '4', '--read-snp-limit', '10', '-F', '0.2', '--min-coverage', '6']
+    click.echo('Calling variants on %s using Freebayes...' % ', '.join(sample_list))
+    call_args = [config['filePaths']['freebayes']] + options+ ['-f', reference] + sample_list
+    with open(output, 'w+') as call_out:
+        run(call_args, stdout=call_out)
 
 
 ##### POST-PROCESSING #####
@@ -441,20 +496,20 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
 
     # clean up intermediary files -- but only after we have the final file
     # still not working 100% -- IT STILL RUNS EVEN IF BSQR WASN'T SUCCESSFUL
-    # if check_existence([bqsr_output]):
-    #     if readgroup_info is not None:
-    #         click.echo('Cleaning up %s...' % ', '.join([rg_output, dup_output, intervals_output, realign_output,
-    #                                                     table_output, output_dir + smpl_name + '.metrics']))
-    #         index_files = [item+'.bai' for item in [rg_output, dup_output]]
-    #         index_files.append('.'.join(realign_output.split('.')[:-1])+'.bai')
-    #         run(['rm', rg_output, dup_output, intervals_output, realign_output,
-    #              table_output, output_dir + smpl_name + '.metrics'] + index_files)
-    #     else:
-    #         index_files = [item+'.bai' for item in [dup_output, realign_output]]
-    #         click.echo('Cleaning up %s...' % ', '.join([dup_output, intervals_output, realign_output,
-    #                                                 table_output, os.path.join(output_dir, smpl_name + '.metrics')]
-    #                                                    + index_files))
-    #         run(['rm', dup_output, intervals_output, realign_output, table_output])
+    if check_existence([bqsr_output]):
+        if readgroup_info is not None:
+            click.echo('Cleaning up %s...' % ', '.join([rg_output, dup_output, intervals_output, realign_output,
+                                                        table_output, output_dir + smpl_name + '.metrics']))
+            index_files = [item+'.bai' for item in [rg_output, dup_output]]
+            index_files.append('.'.join(realign_output.split('.')[:-1])+'.bai')
+            run(['rm', rg_output, dup_output, intervals_output, realign_output,
+                 table_output, output_dir + smpl_name + '.metrics'] + index_files)
+        else:
+            index_files = [item+'.bai' for item in [dup_output, realign_output]]
+            click.echo('Cleaning up %s...' % ', '.join([dup_output, intervals_output, realign_output,
+                                                    table_output, os.path.join(output_dir, smpl_name + '.metrics')]
+                                                       + index_files))
+            run(['rm', dup_output, intervals_output, realign_output, table_output])
 
 
 ##### PREP #####
@@ -462,16 +517,64 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
 @cli.command('tabix', short_help='Quickly tabix gunzipped known files.')
 @click.argument('gzipped_files', required=True, type=click.Path(exists=True), nargs=-1)
 def tabix(gzipped_files):
-    for file in gzipped_files:
-        if '.gz' in file:
-            click.echo('Gunzipping %s...' % file)
-            run(['gunzip', file])
-            click.echo('Compressing file %s using bgzip...' % file)
-            run(['bgzip', '.'.join(file.split('.')[:-1])])
-            click.echo('Indexing file %s using tabix....' % file)
-            run(['tabix', file])
-        else:
-            click.echo('Compressing file %s using bgzip...' % file)
-            run(['bgzip', file])
-            click.echo('Indexing file %s using tabix....' % file)
-            run(['tabix', file+'.gz'])
+    tabix_index(gzipped_files)
+
+
+##### COMPARE #####
+@cli.command('compare', short_help='Compare two sets of called variants, '
+                                   'with one of them being assumed to be the baseline set.')
+@click.option('--output-name', '-o', default='comparison',
+              help='Name of the output directory.')
+@click.option('--bed-file', '-b', default=None, help='Only consider variants found in the regions defined by'
+                                                               'the provided bed file.')
+@click.option('--evaluation-regions', '-e', default=None, help='Define high confidence regions.')
+@click.option('--score-field', '-f', default='QUAL', help='Choose a custom VCF score field to use as ROC score. Default '
+                                                        'is QUAL.')
+@click.option('--sample', '-s', default=None, help='If there is more than 1 sample use to select a sample '
+                                                   'or pair of samples.')
+@click.argument('reference', required=True, type=click.Path(exists=True))
+@click.argument('baseline', required=True, type=click.Path(exists=True))
+@click.argument('calls', required=True, type=click.Path(exists=True))
+def compare(output_name, bed_file, evaluation_regions, score_field, sample, reference, baseline, calls):
+    """
+    Evokes rtgtool's vcfeval to compare a set of baseline calls against a set of query calls, outputting a GA4GH-compliant
+    annotated VCF. Next, this VCF is passed into hap.py's qfy.py method in order to compute metrics, namely raw counts
+    of TP/FP/FN, as well as their associated precision and recall.
+    Because of the way vcfeval's algorithm works, a SDF format file of the reference genome will have to be generated.
+    Optionally, regions of the genome wherein to produce the comparison (e.g. exome capture kit regions), as well as
+    those considered to be of high confidence, can be defined by providing a BED file.
+    To select a pair of samples from each variant data set, use the format <baseline_sample>,<calls_sample>.
+    """
+
+    # The reference genome must be converted to SDF
+    sdf_ref = os.path.join(os.path.dirname(reference), '.'.join(os.path.basename(reference).split('.')[:-1])+'.sdf')
+    if os.path.isdir(sdf_ref) is False:
+        click.echo('Converting reference genome %s to the SDF format...' % reference)
+        fastq2sdf_args = [config['filePaths']['rtg'], 'format', '-o', sdf_ref, reference]
+        run(fastq2sdf_args)
+    else: click.echo('Reference genome %s has already been convert to the SDF format under %s' %
+                     (os.path.basename(reference), sdf_ref))
+
+    # Check if baseline and calls are tabix-indexed as this is a must for using vcfeval
+    if not check_existence(baseline+'.tbi'):
+        tabix_index(baseline)
+        baseline += '.gz'
+    if not check_existence(calls+'.tbi'):
+        tabix_index(calls)
+        calls += '.gz'
+    # Create GA4GH-compliant annotated VCFs
+    click.echo('...')
+    rtg_out = output_name + '.vcfeval'
+    rtg_args = [config['filePaths']['rtg'], 'vcfeval', '-o', rtg_out, '--vcf-score-field', score_field, '--template', sdf_ref,
+                 '--baseline', baseline, '--calls', calls, '-m', 'ga4gh']
+    if bed_file is not None: rtg_args += ['--bed-regions', bed_file]
+    if evaluation_regions is not None: rtg_args += ['--evaluation-regions', evaluation_regions]
+    if sample is not None: rtg_args += ['--sample', sample]
+    run(rtg_args)
+    click.echo('Finished.')
+
+
+
+
+
+

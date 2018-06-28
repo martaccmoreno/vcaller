@@ -6,6 +6,8 @@
     "bowtie2": "/home/marta/tools/bowtie2-2.3.4.1-linux-x86_64",
     "tvc": "/home/marta/tools/IonTorrent-VariantCaller-install/usr/local/bin/variant_caller_pipeline.py",
     "varscan2": "/home/marta/tools/VarScan.v2.3.9.jar",
-    "tmap": "/home/marta/tools/tmap"
+    "tmap": "/home/marta/tools/tmap",
+    "freebayes": "/home/marta/tools/freebayes",
+    "rtg": "/home/marta/tools/rtg-tools-3.9/rtg"
   }
 }
