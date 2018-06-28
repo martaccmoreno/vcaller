@@ -4,13 +4,17 @@ from subprocess import run, getstatusoutput
 import click
 
 ##### IMPORT CONFIG #####
-# find where the script directory is (=/= working directory)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(current_dir, 'config.json'), 'r') as data_file:
     config = json.load(data_file)
 
 
 ##### AUXILIARY FUNCTIONS #####
+def flatten_list(list_of_list):
+    """Flatten a list of list into a single list."""
+    return [item for sublist in list_of_list for item in sublist]
+
+
 def check_existence(filename_list):
     """Check if files with the filenames in the list already exist in the working directory."""
     if type(filename_list) is str: filename_list = [filename_list]
@@ -20,14 +24,10 @@ def check_existence(filename_list):
         return False
 
 
-def flatten_list(list_of_list):
-    """Flatten a list of list into a single list."""
-    return [item for sublist in list_of_list for item in sublist]
-
-
 def remove_suffix(file_name):
     """Remove the suffix of a filename, e.g. 'reference.fa' becomes 'reference'"""
     return '.'.join(file_name.split('.')[:-1])
+
 
 def replace_suffix(file_name, new_suffix):
     """
@@ -40,6 +40,7 @@ def replace_suffix(file_name, new_suffix):
         return remove_suffix(file_name) + new_suffix
     else:
         return remove_suffix(file_name) + '.' + new_suffix
+
 
 def tabix_index(gzipped_files):
     if type(gzipped_files) is str: gzipped_files = [gzipped_files]
@@ -55,7 +56,8 @@ def tabix_index(gzipped_files):
             click.echo('Compressing file %s using bgzip...' % file)
             run(['bgzip', file])
             click.echo('Indexing file %s using tabix....' % file)
-            run(['tabix', file+'.gz'])
+            run(['tabix', file + '.gz'])
+
 
 ##### MAIN GROUP #####
 @click.group()
@@ -85,7 +87,7 @@ def align_bwa(output, nthreads, reference, read1, read2):
     It is only mandatory to include the reference genome file and a sample read as arguments.
     If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
 
-    # check_index: check if reference genome is already indexed
+    # Check if reference genome is already indexed
     suffix_list = ['.amb', '.ann', '.bwt', '.pac', '.sa']
     if check_existence([reference + suffix for suffix in suffix_list]):
         click.echo('Index files already exist!\n Skipping reference genome indexing.')
@@ -98,21 +100,19 @@ def align_bwa(output, nthreads, reference, read1, read2):
     if check_existence([sam_output]):
         click.echo('Aligned SAM read file already exists!')
     else:
-        click.echo(
-            'Aligning read(s) against the reference genome...')  # find way to make message fancier with custom names
+        click.echo('Aligning reads against the reference genome...')
         align_args = ['bwa', 'mem', '-M', '-t', nthreads, reference, read1]
         if read2 is not None:
             align_args += [read2]
         with open(sam_output, "w+") as align_out:
             run(align_args, stdout=align_out)
 
-    # Sort and convert to BAM
     click.echo('Sorting and converting to BAM...')
-    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', '/tmp/' + os.path.basename(output_name) + '.temp',
-                 sam_output]
+    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', os.path.join('/tmp/', replace_suffix(
+        os.path.basename(output)), 'tmp'), sam_output]
     run(sort_args)
 
-    # clean up intermediary files
+    # Remove intermediary files
     click.echo('Cleaning up %s...' % sam_output)
     run(['rm', sam_output])
 
@@ -129,38 +129,34 @@ def align_bowtie2(output, reference, read1, read2):
     If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
 
     suffix_list = ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', '.rev.1.bt2', '.rev.2.bt2']
-    suffixes = ['.'.join(reference.split('.')[:-1]) + suffix for suffix in suffix_list]
+    suffixes = [remove_suffix(reference) + suffix for suffix in suffix_list]
     if check_existence(suffixes):
-        click.echo('Index files already exist!\n Skipping reference genome indexing.')
+        click.echo('Index files already exist! Skipping reference genome indexing.')
     else:
-        click.echo('Need to generate index files!\n Indexing reference genome %s...' % reference)
-        index_args = [config['filePaths']['bowtie2'] + '/bowtie2-build', reference, '.'.join(reference.split('.')[:-1])]
+        click.echo('Need to generate index files! Indexing reference genome %s...' % reference)
+        index_args = [config['filePaths']['bowtie2'] + '/bowtie2-build', reference, remove_suffix(reference)]
         run(index_args)
 
-    output_basename = os.path.basename('.'.join(output.split('.')[:-1]))
-    sam_output = os.path.dirname(output) + '/' + output_basename + '.sam'
-    if read2 is None:  # if read is single-ended
-        align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', '.'.join(reference.split('.')[:-1]), read1,
-                      '-S', sam_output]
-        click.echo('Aligning read %s against the reference genome...' % read1)
-    else:  # if paired_end
-        align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', '.'.join(reference.split('.')[:-1]),
-                      '-1', read1, '-2', read2, '-S', sam_output]
-        click.echo('Aligning reads %s %s against the reference genome...' % (read1, read2))
+    click.echo('Aligning reads against the reference genome...')
+    sam_output = replace_suffix(output, 'sam')
+    align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', remove_suffix(reference), '-S', sam_output,
+                  read1]
+    if read2 is not None:
+        align_args += [read2]
     run(align_args)
 
-    # Sort and convert to BAM
     click.echo('Sorting and converting to BAM...')
-    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', '/tmp/' + output_basename + '_temp', sam_output]
+    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', os.path.join('/tmp/', replace_suffix(
+        os.path.basename(output)), 'tmp'), sam_output, sam_output]
     run(sort_args)
 
-    # clean up intermediary files
+    # Remove intermediary files
     click.echo('Cleaning up %s...' % sam_output)
     run(['rm', sam_output])
 
 
 @align.command('tmap')
-@click.option('--output', '-o', default='tmap_output.bam', # output will have to be redirected
+@click.option('--output', '-o', default='tmap_output.bam',  # output will have to be redirected
               help='Name of the output file (extension will be added automatically)')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('read1', type=click.Path(exists=True))
@@ -170,27 +166,22 @@ def align_tmap(output, reference, read1, read2):
     It is only mandatory to include the reference genome file and the reads of a sample as arguments.
     If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
 
-    # add check to gunzip if gzipped
     suffix_list = ['.tmap.anno', '.tmap.bwt', '.tmap.pac', '.tmap.sa']
     suffixes = [reference + suffix for suffix in suffix_list]
     if check_existence(suffixes):
-        click.echo('Index files already exist!\n Skipping reference genome indexing.')
+        click.echo('Index files already exist! Skipping reference genome indexing.')
     else:
-        click.echo('Need to generate index files!\n Indexing reference genome %s...' % reference)
+        click.echo('Need to generate index files! Indexing reference genome %s...' % reference)
         index_args = [config['filePaths']['tmap'], 'index', '-f', reference]
         run(index_args)
 
     if read2 is None:  # if read is single-ended
-        align_args = [config['filePaths']['tmap'], 'map1', '-f', reference, '-r', read1, '-o', '2']
-        if 'gz' in read1.split('.'): align_args = align_args + ['--input-gz']
-        click.echo('Aligning read %s against the reference genome...' % read1)
-        with open(output, "w+") as align_out:
-            run(align_args, stdout=align_out)
-    else:  # if paired_end
-        align_args = [config['filePaths']['tmap'], 'map1','-f', reference, '-r', read1, '-r', read2, '-o', '2']
-        if 'gz' in read1.split('.') and 'gz' in read2.split('.'): align_args = align_args + ['--input-gz']
-        else: click.echo('Ensure that both read pairs are gzipped.') # needs proper exception handling
-        click.echo('Aligning reads %s %s against the reference genome...' % (read1, read2))
+        align_args = [config['filePaths']['tmap'], 'map1', '-o', '2', '-f', reference, '-r', read1]
+        if read2 is not None:
+            align_args += [read2]
+        if 'gz' in read1.split('.') or 'gz' in read2.split('.'):
+            align_args += ['--input-gz']
+        click.echo('Aligning reads against the reference genome...')
         with open(output, "w+") as align_out:
             run(align_args, stdout=align_out)
 
@@ -224,19 +215,16 @@ def call_gatk(output, dbsnp, reference, sample1, sample2):
     generated through Picard's CreateSequenceDictionary, then it applies the samtools index command on each sample.
     """
 
-    # samtools faidx on REFERENCE
     if check_existence([reference + '.fai']):
-        click.echo('Reference faidx index file already exists!\nSkipping faidx indexing.')
+        click.echo('Reference faidx index file already exists! Skipping faidx indexing.')
     else:
         click.echo('Indexing reference file %s...' % reference)
-        faidx_args = ['samtools', 'faidx', reference]
-        run(faidx_args)
+        run(['samtools', 'faidx', reference])
 
-    # generate .dict dictionary file for REFERENCE
-    dict_file = reference.split('.')[0] + '.dict'
+    dict_file = replace_suffix(reference, 'dict')
     if check_existence([dict_file]):
         click.echo(
-            'Dictionary file %s already exists.\nSkipping reference genome dictionary file generation.' % dict_file)
+            'Dictionary file %s already exists. Skipping reference genome dictionary file generation.' % dict_file)
     else:
         click.echo('Generating reference genome dictionary %s...' % dict_file)
         dict_vars = ['java', '-jar', config['filePaths']['picard'], 'CreateSequenceDictionary', 'R=%s' % reference,
@@ -245,18 +233,15 @@ def call_gatk(output, dbsnp, reference, sample1, sample2):
 
     sample_list = [sample1] + [s for s in sample2]
     for smpl in sample_list:
-        if check_existence(['.'.join(smpl.split('.')[:-1]) + '.bai']) or check_existence(smpl + '.bai'):
-            click.echo('Sample index .bai files already exist!\nSkipping sample indexing.')
+        if check_existence([replace_suffix(smpl, 'bai')]) or check_existence(smpl + '.bai'):
+            click.echo('Sample index .bai files already exist! Skipping sample indexing.')
         else:
             click.echo('Need to generate sample index .bai file!\nIndexing sample file %s...' % smpl)
-            index_args = ['samtools', 'index', smpl]
-            run(index_args)
+            run(['samtools', 'index', smpl])
 
-    # run GATK-HC
     click.echo('Calling variants on samples %s with GATK-HC...' % ', '.join(sample_list))
     if dbsnp is None:
-        # each sample needs to be preceed by an -I so this is not working for more than one sample?
-        gatk_args = [config['filePaths']['gatk4'], 'HaplotypeCaller', '-R', reference, '-I'] + \
+        gatk_args = [config['filePaths']['gatk4'], 'HaplotypeCaller', '-R', reference] + \
                     flatten_list([['-I'] + [sample_list[i]] for i in range(len(sample_list))]) + ['-O', output]
     else:
         gatk_args = [config['filePaths']['gatk4'], 'HaplotypeCaller', '-R', reference] + \
@@ -281,18 +266,17 @@ def call_bcftools(output, reference, sample1, sample2):
     """
 
     sample_list = [sample1] + [s for s in sample2]
-    bcf_output = '.'.join(output.split('.')[:-1])+'.bcf'
-    # bcftools mpileup
+    bcf_output = replace_suffix(output, 'bcf')
+
     click.echo('Calculating genotype likelihoods for %s...' % ', '.join(sample_list))
     mpileup_args = ['bcftools', 'mpileup', '-Ob', '-o', bcf_output, '-f', reference] + sample_list
     run(mpileup_args)
 
-    # variant calling
     click.echo('Calling variants on %s with BCFtools...' % ', '.join(sample_list))
     call_args = ['bcftools', 'call', '-vmO', 'v', '-o', output, bcf_output]
     run(call_args)
 
-    # clean up intermediary files
+    # Remove intermediary files
     click.echo('Cleaning up %s...' % bcf_output)
     run(['rm', bcf_output])
 
@@ -310,11 +294,13 @@ def call_tvc(output, reference, sample1, sample2):
     """
 
     sample_list = [sample1] + [s for s in sample2]
+
     click.echo('Creating mpipleup file using %s...' % ', '.join(sample_list))
-    mpileup_file = '.'.join(output.split('.')[:-1]) + '.pileup'
+    mpileup_file = replace_suffix(output, 'pileup')
     pileup_args = ['samtools', 'mpileup', '-f', reference] + sample_list
     with open(mpileup_file, 'w+') as pileup_out:
         run(pileup_args, stdout=pileup_out)
+
     click.echo('Calling variants on %s with Varscan2...' % mpileup_file)
     call_args = ['java', '-jar', config['filePaths']['varscan2'], 'mpileup2cns', mpileup_file, '--output-vcf', '1',
                  '--variants', '1', '--p-value', '0.10', '--min-coverage', '2']
@@ -334,18 +320,16 @@ def call_tvc(output, reference, sample1, sample2):
 @click.argument('sample', type=click.Path(exists=True))
 def call_tvc(output_dir, target_file, reference, sample):
     """Call variants using TorrentVariantCaller (TVC).
-
     Only one sample sequence file can be specified. Sample sequence must have been previously aligned, so that it is
     in the SAM/BAM format. A reference genome must be provided.
     """
 
     click.echo('Calling variants on %s with TVC...' % sample)
-    if target_file is None:
-        call_args = [config['filePaths']['tvc'], '-i', sample, '-r', reference, '-o', output_dir]
-    else:
-        call_args = [config['filePaths']['tvc'], '-i', sample, '-r', reference, '-b', target_file,
-                     '-o', output_dir]
+    call_args = [config['filePaths']['tvc'], '-i', sample, '-r', reference, '-o', output_dir]
+    if target_file:
+        call_args += ['-b', target_file]
     run(call_args)
+
 
 @call.command('freebayes')
 @click.option('--output', '-o', default='freebayes_out.vcf',
@@ -354,19 +338,16 @@ def call_tvc(output_dir, target_file, reference, sample):
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
 def call_freebayes(output, reference, sample1, sample2):
-    """Call variants using SAMtools's BCFtools.
-
-    This command calls variants on input aligned sequence files (samples) after calculating their genotype likelihoods.
-
+    """Call variants using Freebayes.
     Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
     are in the SAM/BAM format. A reference genome must be provided.
     """
 
     sample_list = [sample1] + [s for s in sample2]
 
-    options = ['-m', '4', '--read-snp-limit', '10', '-F', '0.2', '--min-coverage', '6']
     click.echo('Calling variants on %s using Freebayes...' % ', '.join(sample_list))
-    call_args = [config['filePaths']['freebayes']] + options+ ['-f', reference] + sample_list
+    options = ['-m', '4', '--read-snp-limit', '10', '-F', '0.2', '--min-coverage', '6']
+    call_args = [config['filePaths']['freebayes']] + options + ['-f', reference] + sample_list
     with open(output, 'w+') as call_out:
         run(call_args, stdout=call_out)
 
@@ -390,45 +371,43 @@ def call_freebayes(output, reference, sample1, sample2):
 @click.argument('known-snps', required=True, type=click.Path(exists=True))
 @click.argument('reference', required=True, type=click.Path(exists=True))
 @click.argument('sample', required=True, type=click.Path(exists=True))
-def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_indels, known_indels, known_snps, reference,
+def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_indels, known_indels, known_snps,
+            reference,
             sample):
     """Performs a group of steps for the post-processing in preparation for variant calling
     on one SAM/BAM sampl file. A must do for running the gatk subcommand under call."""
 
-    smpl_name, smpl_extension = '.'.join(os.path.basename(sample).split('.')[:-1]), '.' + sample.split('.')[-1]
+    smpl_name, smpl_extension = remove_suffix(sample), '.' + sample.split('.')[-1]
 
-    # prep reference genome
-    if not check_existence([reference+'.fai']):
+    if not check_existence([reference + '.fai']):
         click.echo('Generating faidx index for %s...' % reference)
         run(['samtools', 'faidx', reference])
-    if not check_existence(['.'.join(reference.split('.')[:-1])+'.dict']):
+    if not check_existence([remove_suffix(reference) + '.dict']):
         click.echo('Generating sequence dictionary for %s...' % reference)
         run([config['filePaths']['gatk4'], 'CreateSequenceDictionary', '-R', reference])
 
-    # sort and convert SAM extension files to BAM
-    if ((smpl_extension is not '.bam') or (getstatusoutput('samtools index '+sample)[0] != 0)):
-        sorted_output = os.path.join(output_dir, smpl_name + '.bam')
+    if (smpl_extension is not '.bam') or (getstatusoutput('samtools index ' + sample)[0] != 0):
+        sorted_output = replace_suffix(sample, 'bam')
         if not check_existence([sorted_output]):
             click.echo('Sorting and converting %s to BAM...' % sample)
             sort_args = ['samtools', 'sort', '-O', 'bam', '-o', sorted_output, '-T',
-                         os.path.join('/tmp/', smpl_name+'.temp'), sample]
+                         os.path.join('/tmp/', os.path.basename(smpl_name) + '.temp'), sample]
             run(sort_args)
-            click.echo('Indexing %s...' % smpl_name)
+            click.echo('Indexing %s...' % sorted_output)
             run(['samtools', 'index', sorted_output])
-        smpl_extension = '.bam'
         sample = sorted_output
 
-    if check_existence([sample+'.bai']): # to avoid unnecessary 'file not found' errors
-        run(['rm', sample+'.bai'])
+    if check_existence([sample + '.bai']):  # to avoid unnecessary 'file not found' errors
+        run(['rm', sample + '.bai'])
 
     # dedupping
-    dup_output = os.path.join(output_dir, smpl_name + '.DUP' + smpl_extension)
+    dup_output = smpl_name + '.DUP.bam'
     dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', sample,
                 '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
-                '-M', os.path.join(output_dir, smpl_name + '.metrics')]
+                '-M', smpl_name + '.metrics']
     if readgroup_info is not None:
         # More info on RGs: https://gatkforums.broadinstitute.org/gatk/discussion/6472/read-groups
-        rg_output = os.path.join(output_dir, smpl_name + '.RG' + smpl_extension)
+        rg_output = smpl_name + '.RG.bam'
         if not check_existence([rg_output]):
             click.echo('Adding Read Group information to %s...' % sample)
             rg_info = readgroup_info.split(',')
@@ -440,32 +419,31 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
                        '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM'],
                        '-SO', 'coordinate']
             run(rg_args)
-        if not check_existence([rg_output+'.bai']):
-            click.echo('Indexing %s...' % smpl_name)
+        if not check_existence([replace_suffix(rg_output, 'bai')]):
+            click.echo('Indexing %s...' % rg_output)
             run(['samtools', 'index', rg_output])
-        dup_output = '.'.join(rg_output.split('.')[:-1]) + '.DUP' + smpl_extension
+        dup_output = replace_suffix(rg_output, '.DUP') + '.bam'
         dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', rg_output,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
                     '-M', os.path.join(output_dir, smpl_name + '.metrics')]
 
     if not check_existence([dup_output]):
-        click.echo('Marking and removing duplicates for %s...' % smpl_name)
+        click.echo('Marking and removing duplicates for %s...' % sample)
         run(dup_args)
-    if not check_existence([dup_output+'.bai']):
-        click.echo('Indexing %s...' % smpl_name)
+    if not check_existence([remove_suffix(dup_output) + '.bai']):
+        click.echo('Indexing %s...' % dup_output)
         run(['samtools', 'index', dup_output])
 
-    # Realign around indels
-    # Using gatk3 because of this
+    # Realign around indels; using gatk3 because of this step
     # https://gatkforums.broadinstitute.org/gatk/discussion/11455/realignertargetcreator-and-indelrealigner
-    intervals_output = os.path.join(output_dir, smpl_name + '.intervals')
+    intervals_output = smpl_name + '.intervals'
     if not check_existence([intervals_output]):
         click.echo('Creating indel realignment intervals for %s...' % smpl_name)
         intervals_args = ['java', '-jar', config['filePaths']['gatk3'], '-T', 'RealignerTargetCreator', '-R', reference,
                           '-I', dup_output, '-o', intervals_output, '--known',
                           known_indels]
         run(intervals_args)
-    realign_output = '.'.join(dup_output.split('.')[:-1]) + '.RLGN' + smpl_extension
+    realign_output = replace_suffix(dup_output, 'RLGN') + '.bam'
     if not check_existence([realign_output]):
         click.echo('Applying indel realignment based on the intervals for %s...' % smpl_name)
         realign_args = ['java', '-jar', config['filePaths']['gatk3'], '-T', 'IndelRealigner', '-R', reference,
@@ -484,7 +462,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
                      ['-I', realign_output, '-O', table_output]
         run(table_args)
     if output_name is None:
-        bqsr_output = os.path.join(output_dir, smpl_name + '.processed' + smpl_extension)
+        bqsr_output = os.path.join(smpl_name + '.processed.bam')
     else:
         bqsr_output = output_name
     if not check_existence([bqsr_output]):
@@ -500,14 +478,14 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         if readgroup_info is not None:
             click.echo('Cleaning up %s...' % ', '.join([rg_output, dup_output, intervals_output, realign_output,
                                                         table_output, output_dir + smpl_name + '.metrics']))
-            index_files = [item+'.bai' for item in [rg_output, dup_output]]
-            index_files.append('.'.join(realign_output.split('.')[:-1])+'.bai')
+            index_files = [item + '.bai' for item in [rg_output, dup_output]]
+            index_files.append('.'.join(realign_output.split('.')[:-1]) + '.bai')
             run(['rm', rg_output, dup_output, intervals_output, realign_output,
                  table_output, output_dir + smpl_name + '.metrics'] + index_files)
         else:
-            index_files = [item+'.bai' for item in [dup_output, realign_output]]
+            index_files = [item + '.bai' for item in [dup_output, realign_output]]
             click.echo('Cleaning up %s...' % ', '.join([dup_output, intervals_output, realign_output,
-                                                    table_output, os.path.join(output_dir, smpl_name + '.metrics')]
+                                                        table_output, os.path.join(output_dir, smpl_name + '.metrics')]
                                                        + index_files))
             run(['rm', dup_output, intervals_output, realign_output, table_output])
 
@@ -526,10 +504,11 @@ def tabix(gzipped_files):
 @click.option('--output-name', '-o', default='comparison',
               help='Name of the output directory.')
 @click.option('--bed-file', '-b', default=None, help='Only consider variants found in the regions defined by'
-                                                               'the provided bed file.')
+                                                     'the provided bed file.')
 @click.option('--evaluation-regions', '-e', default=None, help='Define high confidence regions.')
-@click.option('--score-field', '-f', default='QUAL', help='Choose a custom VCF score field to use as ROC score. Default '
-                                                        'is QUAL.')
+@click.option('--score-field', '-f', default='QUAL',
+              help='Choose a custom VCF score field to use as ROC score. Default '
+                   'is QUAL.')
 @click.option('--sample', '-s', default=None, help='If there is more than 1 sample use to select a sample '
                                                    'or pair of samples.')
 @click.argument('reference', required=True, type=click.Path(exists=True))
@@ -547,34 +526,30 @@ def compare(output_name, bed_file, evaluation_regions, score_field, sample, refe
     """
 
     # The reference genome must be converted to SDF
-    sdf_ref = os.path.join(os.path.dirname(reference), '.'.join(os.path.basename(reference).split('.')[:-1])+'.sdf')
+    sdf_ref = os.path.join(replace_suffix(reference, 'sdf'))
     if os.path.isdir(sdf_ref) is False:
         click.echo('Converting reference genome %s to the SDF format...' % reference)
         fastq2sdf_args = [config['filePaths']['rtg'], 'format', '-o', sdf_ref, reference]
         run(fastq2sdf_args)
-    else: click.echo('Reference genome %s has already been convert to the SDF format under %s' %
-                     (os.path.basename(reference), sdf_ref))
+    else:
+        click.echo('Reference genome %s has already been convert to the SDF format under %s' %
+                   (os.path.basename(reference), sdf_ref))
 
     # Check if baseline and calls are tabix-indexed as this is a must for using vcfeval
-    if not check_existence(baseline+'.tbi'):
+    if not check_existence(baseline + '.tbi'):
         tabix_index(baseline)
         baseline += '.gz'
-    if not check_existence(calls+'.tbi'):
+    if not check_existence(calls + '.tbi'):
         tabix_index(calls)
         calls += '.gz'
     # Create GA4GH-compliant annotated VCFs
     click.echo('...')
     rtg_out = output_name + '.vcfeval'
-    rtg_args = [config['filePaths']['rtg'], 'vcfeval', '-o', rtg_out, '--vcf-score-field', score_field, '--template', sdf_ref,
-                 '--baseline', baseline, '--calls', calls, '-m', 'ga4gh']
+    rtg_args = [config['filePaths']['rtg'], 'vcfeval', '-o', rtg_out, '--vcf-score-field', score_field, '--template',
+                sdf_ref,
+                '--baseline', baseline, '--calls', calls, '-m', 'ga4gh']
     if bed_file is not None: rtg_args += ['--bed-regions', bed_file]
     if evaluation_regions is not None: rtg_args += ['--evaluation-regions', evaluation_regions]
     if sample is not None: rtg_args += ['--sample', sample]
     run(rtg_args)
     click.echo('Finished.')
-
-
-
-
-
-
