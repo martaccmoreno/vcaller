@@ -8,6 +8,7 @@
     "varscan2": "/home/marta/tools/VarScan.v2.3.9.jar",
     "tmap": "/home/marta/tools/tmap",
     "freebayes": "/home/marta/tools/freebayes",
-    "rtg": "/home/marta/tools/rtg-tools-3.9/rtg"
+    "rtg": "/home/marta/tools/rtg-tools-3.9/rtg",
+    "qfy.py": "/home/marta/tools/hap.py-install/bin/qfy.py"
   }
 }

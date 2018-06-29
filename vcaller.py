@@ -43,7 +43,7 @@ def replace_suffix(file_name, new_suffix):
 
 
 def tabix_index(gzipped_files):
-    if type(gzipped_files) is str: gzipped_files = [gzipped_files]
+    if type(gzipped_files) is not list: gzipped_files = [gzipped_files]
     for file in gzipped_files:
         if '.gz' in file:
             click.echo('Gunzipping %s...' % file)
@@ -58,6 +58,19 @@ def tabix_index(gzipped_files):
             click.echo('Indexing file %s using tabix....' % file)
             run(['tabix', file + '.gz'])
 
+def cleanup(files_or_dirs):
+    """
+    Permanently remove one or more files or directories.
+    """
+    if type(files_or_dirs) is not list: files_or_dirs = [files_or_dirs]
+    click.echo('Removing the following files: %s' % ', '.join(files_or_dirs))
+    for file_or_dir in files_or_dirs:
+        if os.path.isfile(file_or_dir):
+            run(['rm', file_or_dir])
+        elif os.path.isdir(file_or_dir):
+            run(['rm', '-r', file_or_dir])
+        else:
+            click.echo('Invalid input: %s is neither a file nor a directory...' % file_or_dir)
 
 ##### MAIN GROUP #####
 @click.group()
@@ -366,12 +379,13 @@ def call_freebayes(output, reference, sample1, sample2):
               multiple=True)
 @click.option('--add-known-indels', '-i', default='', help='Additional files containing known indel information.',
               multiple=True)
+@click.option('--no-clean', is_flag=True, help='Do not remove intermidiary files')
 @click.argument('known-indels', required=True,
                 type=click.Path(exists=True))  # ADD OPTIONS FOR MORE KNOWN INDELS AND SNPS
 @click.argument('known-snps', required=True, type=click.Path(exists=True))
 @click.argument('reference', required=True, type=click.Path(exists=True))
 @click.argument('sample', required=True, type=click.Path(exists=True))
-def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_indels, known_indels, known_snps,
+def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_indels, no_clean, known_indels, known_snps,
             reference,
             sample):
     """Performs a group of steps for the post-processing in preparation for variant calling
@@ -405,7 +419,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
     dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', sample,
                 '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
                 '-M', smpl_name + '.metrics']
-    if readgroup_info is not None:
+    if readgroup_info:
         # More info on RGs: https://gatkforums.broadinstitute.org/gatk/discussion/6472/read-groups
         rg_output = smpl_name + '.RG.bam'
         if not check_existence([rg_output]):
@@ -419,13 +433,10 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
                        '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM'],
                        '-SO', 'coordinate']
             run(rg_args)
-        if not check_existence([replace_suffix(rg_output, 'bai')]):
-            click.echo('Indexing %s...' % rg_output)
-            run(['samtools', 'index', rg_output])
         dup_output = replace_suffix(rg_output, '.DUP') + '.bam'
         dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', rg_output,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
-                    '-M', os.path.join(output_dir, smpl_name + '.metrics')]
+                    '-M', smpl_name + '.metrics']
 
     if not check_existence([dup_output]):
         click.echo('Marking and removing duplicates for %s...' % sample)
@@ -470,24 +481,16 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         bqsr_args = [config['filePaths']['gatk4'], 'ApplyBQSR',
                      '-I', realign_output, '-bqsr', table_output, '-O', bqsr_output]
         run(bqsr_args)
-        run(['samtools', 'index', bqsr_output])
 
     # clean up intermediary files -- but only after we have the final file
     # still not working 100% -- IT STILL RUNS EVEN IF BSQR WASN'T SUCCESSFUL
-    if check_existence([bqsr_output]):
-        if readgroup_info is not None:
-            click.echo('Cleaning up %s...' % ', '.join([rg_output, dup_output, intervals_output, realign_output,
-                                                        table_output, output_dir + smpl_name + '.metrics']))
-            index_files = [item + '.bai' for item in [rg_output, dup_output]]
-            index_files.append('.'.join(realign_output.split('.')[:-1]) + '.bai')
-            run(['rm', rg_output, dup_output, intervals_output, realign_output,
-                 table_output, output_dir + smpl_name + '.metrics'] + index_files)
-        else:
-            index_files = [item + '.bai' for item in [dup_output, realign_output]]
-            click.echo('Cleaning up %s...' % ', '.join([dup_output, intervals_output, realign_output,
-                                                        table_output, os.path.join(output_dir, smpl_name + '.metrics')]
-                                                       + index_files))
-            run(['rm', dup_output, intervals_output, realign_output, table_output])
+    if check_existence([bqsr_output]) and no_clean is False:
+        files_to_rmv = [rg_output, dup_output, intervals_output, realign_output, table_output,
+                    os.path.join(output_dir, smpl_name + '.metrics')]
+        if rg_output:
+            files_to_rmv += [rg_output]
+        index_files = [replace_suffix(item, 'bai') for item in [file for file in files_to_rmv if '.bam' in file]]
+        cleanup(files_to_rmv+index_files)
 
 
 ##### PREP #####
@@ -501,7 +504,7 @@ def tabix(gzipped_files):
 ##### COMPARE #####
 @cli.command('compare', short_help='Compare two sets of called variants, '
                                    'with one of them being assumed to be the baseline set.')
-@click.option('--output-name', '-o', default='comparison',
+@click.option('--output-dir', '-o', default='comparison', # change to just output
               help='Name of the output directory.')
 @click.option('--bed-file', '-b', default=None, help='Only consider variants found in the regions defined by'
                                                      'the provided bed file.')
@@ -511,10 +514,11 @@ def tabix(gzipped_files):
                    'is QUAL.')
 @click.option('--sample', '-s', default=None, help='If there is more than 1 sample use to select a sample '
                                                    'or pair of samples.')
+@click.option('--no-clean', is_flag=True, help='Do not remove intermidiary files')
 @click.argument('reference', required=True, type=click.Path(exists=True))
 @click.argument('baseline', required=True, type=click.Path(exists=True))
 @click.argument('calls', required=True, type=click.Path(exists=True))
-def compare(output_name, bed_file, evaluation_regions, score_field, sample, reference, baseline, calls):
+def compare(output_dir, bed_file, evaluation_regions, score_field, sample, no_clean, reference, baseline, calls):
     """
     Evokes rtgtool's vcfeval to compare a set of baseline calls against a set of query calls, outputting a GA4GH-compliant
     annotated VCF. Next, this VCF is passed into hap.py's qfy.py method in order to compute metrics, namely raw counts
@@ -542,14 +546,32 @@ def compare(output_name, bed_file, evaluation_regions, score_field, sample, refe
     if not check_existence(calls + '.tbi'):
         tabix_index(calls)
         calls += '.gz'
+
+    click.echo('Creating directory %s...' % output_dir)
+
     # Create GA4GH-compliant annotated VCFs
-    click.echo('...')
-    rtg_out = output_name + '.vcfeval'
-    rtg_args = [config['filePaths']['rtg'], 'vcfeval', '-o', rtg_out, '--vcf-score-field', score_field, '--template',
-                sdf_ref,
-                '--baseline', baseline, '--calls', calls, '-m', 'ga4gh']
-    if bed_file is not None: rtg_args += ['--bed-regions', bed_file]
-    if evaluation_regions is not None: rtg_args += ['--evaluation-regions', evaluation_regions]
-    if sample is not None: rtg_args += ['--sample', sample]
-    run(rtg_args)
-    click.echo('Finished.')
+    rtg_out = os.path.join(output_dir, output_dir + '-vcfeval')
+    if not os.path.isdir(rtg_out):
+        click.echo('Comparing baseline %s against call set %s using vcfeval...' % (baseline, calls))
+        rtg_args = [config['filePaths']['rtg'], 'vcfeval', '-o', rtg_out, '--vcf-score-field',
+                    score_field, '--template', sdf_ref, '--baseline', baseline, '--calls', calls, '-m', 'ga4gh']
+        if bed_file is not None: rtg_args += ['--bed-regions', bed_file]
+        if evaluation_regions is not None: rtg_args += ['--evaluation-regions', evaluation_regions]
+        if sample is not None: rtg_args += ['--sample', sample]
+        run(rtg_args)
+
+    click.echo('Moving to directory %s...' % output_dir)
+    initial_path = os.getcwd()
+    os.chdir(output_dir)
+    click.echo('Running qfy.py on %s...' % os.path.join(rtg_out, 'output.vcf.gz'))
+    qfy_args = [config['filePaths']['qfy.py'], '--type', 'ga4gh', '--false-positives',
+                os.path.normpath(os.path.join(initial_path, evaluation_regions)),  '--write-counts', '--roc',
+                os.path.normpath(os.path.join(initial_path, score_field)), '--reference',
+                os.path.normpath(os.path.join(initial_path, reference)), '-o', output_dir,
+                os.path.join(os.path.basename(rtg_out), 'output.vcf.gz')]
+    run(qfy_args)
+    click.echo('Returning to %s...' % initial_path)
+    os.chdir(initial_path)
+
+    if no_clean is False:
+        cleanup(rtg_out)
