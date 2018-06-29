@@ -359,8 +359,7 @@ def call_freebayes(output, reference, sample1, sample2):
     sample_list = [sample1] + [s for s in sample2]
 
     click.echo('Calling variants on %s using Freebayes...' % ', '.join(sample_list))
-    options = ['-m', '4', '--read-snp-limit', '10', '-F', '0.2', '--min-coverage', '6']
-    call_args = [config['filePaths']['freebayes']] + options + ['-f', reference] + sample_list
+    call_args = [config['filePaths']['freebayes'], '-f', reference] + sample_list
     with open(output, 'w+') as call_out:
         run(call_args, stdout=call_out)
 
