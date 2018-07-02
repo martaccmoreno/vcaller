@@ -72,6 +72,7 @@ def cleanup(files_or_dirs):
         else:
             click.echo('Invalid input: %s is neither a file nor a directory...' % file_or_dir)
 
+
 ##### MAIN GROUP #####
 @click.group()
 @click.version_option()
@@ -368,8 +369,8 @@ def call_freebayes(output, reference, sample1, sample2):
 @cli.command('process', short_help='Prepare reads for variant calling.')
 @click.option('--output-name', '-o', default=None,
               help='Name of the output file (extension will be added automatically)')
-@click.option('--output-dir', '-d', default='',
-              help='Name of output directory; by default save to current directory.')
+@click.option('--output-dir', '-d', default=None,
+              help='Name of output directory; by default save in the same directory as the final output.')
 @click.option('--readgroup-info', default=None, type=str, help='Add read group information  to the sample, which MUST '
                                                                'follow the format below:\n'
                                                                'ID:identifier,PU:platform_unit,' '\n'
@@ -390,9 +391,11 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
     """Performs a group of steps for the post-processing in preparation for variant calling
     on one SAM/BAM sampl file. A must do for running the gatk subcommand under call."""
 
-    smpl_name, smpl_extension = remove_suffix(sample), '.' + sample.split('.')[-1]
+    if output_dir is None:
+        output_dir = os.path.dirname(output_name)
+    smpl_name, smpl_extension = remove_suffix(os.path.basename(sample)), '.' + sample.split('.')[-1]
 
-    if not check_existence([reference + '.fai']):
+    if not check_existence(reference + '.fai'):
         click.echo('Generating faidx index for %s...' % reference)
         run(['samtools', 'faidx', reference])
     if not check_existence([remove_suffix(reference) + '.dict']):
@@ -404,24 +407,24 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         if not check_existence([sorted_output]):
             click.echo('Sorting and converting %s to BAM...' % sample)
             sort_args = ['samtools', 'sort', '-O', 'bam', '-o', sorted_output, '-T',
-                         os.path.join('/tmp/', os.path.basename(smpl_name) + '.temp'), sample]
+                         os.path.join('/tmp/', smpl_name + '.temp'), sample]
             run(sort_args)
             click.echo('Indexing %s...' % sorted_output)
             run(['samtools', 'index', sorted_output])
         sample = sorted_output
 
-    if check_existence([sample + '.bai']):  # to avoid unnecessary 'file not found' errors
+    if check_existence(sample + '.bai'):  # to avoid unnecessary 'file not found' errors
         run(['rm', sample + '.bai'])
 
     # dedupping
-    dup_output = smpl_name + '.DUP.bam'
+    dup_output = os.path.join(output_dir, smpl_name + '.DUP.bam')
     dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', sample,
                 '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
-                '-M', smpl_name + '.metrics']
+                '-M', os.path.join(output_dir, smpl_name + '.metrics')]
     if readgroup_info:
         # More info on RGs: https://gatkforums.broadinstitute.org/gatk/discussion/6472/read-groups
-        rg_output = smpl_name + '.RG.bam'
-        if not check_existence([rg_output]):
+        rg_output = os.path.join(output_dir, smpl_name + '.RG.bam')
+        if not check_existence(rg_output):
             click.echo('Adding Read Group information to %s...' % sample)
             rg_info = readgroup_info.split(',')
             read_groups = {'ID': rg_info[0].split(':')[1], 'PU': rg_info[1].split(':')[1],
@@ -435,27 +438,27 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
         dup_output = replace_suffix(rg_output, '.DUP') + '.bam'
         dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', rg_output,
                     '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
-                    '-M', smpl_name + '.metrics']
+                    '-M', os.path.join(output_dir, smpl_name + '.metrics')]
 
-    if not check_existence([dup_output]):
+    if not check_existence(dup_output):
         click.echo('Marking and removing duplicates for %s...' % sample)
         run(dup_args)
-    if not check_existence([remove_suffix(dup_output) + '.bai']):
-        click.echo('Indexing %s...' % dup_output)
+
+    if not check_existence(dup_output+'.bai'):
         run(['samtools', 'index', dup_output])
 
     # Realign around indels; using gatk3 because of this step
     # https://gatkforums.broadinstitute.org/gatk/discussion/11455/realignertargetcreator-and-indelrealigner
-    intervals_output = smpl_name + '.intervals'
+    intervals_output = os.path.join(output_dir, smpl_name + '.intervals')
     if not check_existence([intervals_output]):
-        click.echo('Creating indel realignment intervals for %s...' % smpl_name)
+        click.echo('Creating indel realignment intervals for %s...' % sample)
         intervals_args = ['java', '-jar', config['filePaths']['gatk3'], '-T', 'RealignerTargetCreator', '-R', reference,
                           '-I', dup_output, '-o', intervals_output, '--known',
                           known_indels]
         run(intervals_args)
     realign_output = replace_suffix(dup_output, 'RLGN') + '.bam'
     if not check_existence([realign_output]):
-        click.echo('Applying indel realignment based on the intervals for %s...' % smpl_name)
+        click.echo('Applying indel realignment based on the intervals for %s...' % sample)
         realign_args = ['java', '-jar', config['filePaths']['gatk3'], '-T', 'IndelRealigner', '-R', reference,
                         '-I', dup_output, '-targetIntervals', intervals_output, '-known', known_indels] + \
                        flatten_list([['-known'] + [add_known_indels[i]] for i in range(len(add_known_indels))]) + \
@@ -465,18 +468,18 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
     # BQSR
     table_output = os.path.join(output_dir, smpl_name + '.table')
     if not check_existence([table_output]):
-        click.echo('Creating base score recalibration table for %s...' % smpl_name)
+        click.echo('Creating base score recalibration table for %s...' % sample)
         table_args = [config['filePaths']['gatk4'], 'BaseRecalibrator', '-R', reference,
                       '--known-sites', known_snps] + \
                      flatten_list([['--known-sites'] + [add_known_snps[i]] for i in range(len(add_known_snps))]) + \
                      ['-I', realign_output, '-O', table_output]
         run(table_args)
     if output_name is None:
-        bqsr_output = os.path.join(smpl_name + '.processed.bam')
+        bqsr_output = os.path.join(output_dir, smpl_name + '.processed.bam')
     else:
         bqsr_output = output_name
     if not check_existence([bqsr_output]):
-        click.echo('Running base score recalibration on %s...' % smpl_name)
+        click.echo('Running base score recalibration on %s...' % sample)
         bqsr_args = [config['filePaths']['gatk4'], 'ApplyBQSR',
                      '-I', realign_output, '-bqsr', table_output, '-O', bqsr_output]
         run(bqsr_args)
@@ -484,9 +487,9 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
     # clean up intermediary files -- but only after we have the final file
     # still not working 100% -- IT STILL RUNS EVEN IF BSQR WASN'T SUCCESSFUL
     if check_existence([bqsr_output]) and no_clean is False:
-        files_to_rmv = [rg_output, dup_output, intervals_output, realign_output, table_output,
+        files_to_rmv = [dup_output, intervals_output, realign_output, table_output,
                     os.path.join(output_dir, smpl_name + '.metrics')]
-        if rg_output:
+        if readgroup_info:
             files_to_rmv += [rg_output]
         index_files = [replace_suffix(item, 'bai') for item in [file for file in files_to_rmv if '.bam' in file]]
         cleanup(files_to_rmv+index_files)
@@ -563,9 +566,8 @@ def compare(output_dir, bed_file, evaluation_regions, score_field, sample, no_cl
     initial_path = os.getcwd()
     os.chdir(output_dir)
     click.echo('Running qfy.py on %s...' % os.path.join(rtg_out, 'output.vcf.gz'))
-    qfy_args = [config['filePaths']['qfy.py'], '--type', 'ga4gh', '--false-positives',
-                os.path.normpath(os.path.join(initial_path, evaluation_regions)),  '--write-counts', '--roc',
-                os.path.normpath(os.path.join(initial_path, score_field)), '--reference',
+    qfy_args = [config['filePaths']['qfy.py'], '--adjust-conf-regions',
+                os.path.normpath(os.path.join(initial_path, evaluation_regions)), '--reference',
                 os.path.normpath(os.path.join(initial_path, reference)), '-o', output_dir,
                 os.path.join(os.path.basename(rtg_out), 'output.vcf.gz')]
     run(qfy_args)
