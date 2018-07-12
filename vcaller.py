@@ -63,7 +63,7 @@ def cleanup(files_or_dirs):
     Permanently remove one or more files or directories.
     """
     if type(files_or_dirs) is not list: files_or_dirs = [files_or_dirs]
-    click.echo('Removing the following files: %s' % ', '.join(files_or_dirs))
+    click.echo('Removing the following files/directories: %s' % ', '.join(files_or_dirs))
     for file_or_dir in files_or_dirs:
         if os.path.isfile(file_or_dir):
             run(['rm', file_or_dir])
@@ -267,10 +267,11 @@ def call_gatk(output, dbsnp, reference, sample1, sample2):
 @call.command('bcftools')
 @click.option('--output', '-o', default='bcftools_out.vcf',
               help='Name of the output file.')
+@click.option('--count-orphans', '-A', is_flag=True)
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_bcftools(output, reference, sample1, sample2):
+def call_bcftools(output, count_orphans, reference, sample1, sample2):
     """Call variants using SAMtools's BCFtools.
 
     This command calls variants on input aligned sequence files (samples) after calculating their genotype likelihoods.
@@ -283,7 +284,10 @@ def call_bcftools(output, reference, sample1, sample2):
     bcf_output = replace_suffix(output, 'bcf')
 
     click.echo('Calculating genotype likelihoods for %s...' % ', '.join(sample_list))
-    mpileup_args = ['bcftools', 'mpileup', '-Ob', '-o', bcf_output, '-f', reference] + sample_list
+    if count_orphans:
+        mpileup_args = ['bcftools', 'mpileup', '-AOb', '-o', bcf_output, '-f', reference] + sample_list
+    else:
+        mpileup_args = ['bcftools', 'mpileup', '-Ob', '-o', bcf_output, '-f', reference] + sample_list
     run(mpileup_args)
 
     click.echo('Calling variants on %s with BCFtools...' % ', '.join(sample_list))
@@ -294,13 +298,13 @@ def call_bcftools(output, reference, sample1, sample2):
     click.echo('Cleaning up %s...' % bcf_output)
     run(['rm', bcf_output])
 
-
 @call.command('varscan2')
 @click.option('--output', '-o', default='bcftools_out.vcf', help='Name of the output file.')
+@click.option('--no-clean', is_flag=True, help='Do not remove intermidiary files')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_tvc(output, reference, sample1, sample2):
+def call_tvc(output, no_clean, reference, sample1, sample2):
     """Call variants using Varscan2.
 
     Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
@@ -321,8 +325,9 @@ def call_tvc(output, reference, sample1, sample2):
     with open(output, 'w+') as call_out:
         run(call_args, stdout=call_out)
 
-    click.echo('Cleaning up %s...' % mpileup_file)
-    run(['rm', mpileup_file])
+    if no_clean is False:
+        click.echo('Cleaning up %s...' % mpileup_file)
+        run(['rm', mpileup_file])
 
 
 @call.command('tvc')
@@ -552,7 +557,7 @@ def compare(output_dir, bed_file, evaluation_regions, score_field, sample, no_cl
     click.echo('Creating directory %s...' % output_dir)
 
     # Create GA4GH-compliant annotated VCFs
-    rtg_out = os.path.join(output_dir, output_dir + '-vcfeval')
+    rtg_out = os.path.join(output_dir, os.path.split(output_dir)[-1] + '-vcfeval')
     if not os.path.isdir(rtg_out):
         click.echo('Comparing baseline %s against call set %s using vcfeval...' % (baseline, calls))
         rtg_args = [config['filePaths']['rtg'], 'vcfeval', '-o', rtg_out, '--vcf-score-field',
@@ -566,9 +571,9 @@ def compare(output_dir, bed_file, evaluation_regions, score_field, sample, no_cl
     initial_path = os.getcwd()
     os.chdir(output_dir)
     click.echo('Running qfy.py on %s...' % os.path.join(rtg_out, 'output.vcf.gz'))
-    qfy_args = [config['filePaths']['qfy.py'], '--adjust-conf-regions',
+    qfy_args = [config['filePaths']['qfy.py'], '-t', 'ga4gh', '--verbose', '--adjust-conf-regions',
                 os.path.normpath(os.path.join(initial_path, evaluation_regions)), '--reference',
-                os.path.normpath(os.path.join(initial_path, reference)), '-o', output_dir,
+                os.path.normpath(os.path.join(initial_path, reference)), '-o', os.path.split(output_dir)[-1],
                 os.path.join(os.path.basename(rtg_out), 'output.vcf.gz')]
     run(qfy_args)
     click.echo('Returning to %s...' % initial_path)
