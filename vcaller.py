@@ -301,10 +301,11 @@ def call_bcftools(output, count_orphans, reference, sample1, sample2):
 @call.command('varscan2')
 @click.option('--output', '-o', default='bcftools_out.vcf', help='Name of the output file.')
 @click.option('--no-clean', is_flag=True, help='Do not remove intermidiary files')
+@click.option('--count-orphans', '-A', is_flag=True)
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_tvc(output, no_clean, reference, sample1, sample2):
+def call_tvc(output, no_clean, count_orphans, reference, sample1, sample2):
     """Call variants using Varscan2.
 
     Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
@@ -315,7 +316,10 @@ def call_tvc(output, no_clean, reference, sample1, sample2):
 
     click.echo('Creating mpipleup file using %s...' % ', '.join(sample_list))
     mpileup_file = replace_suffix(output, 'pileup')
-    pileup_args = ['samtools', 'mpileup', '-f', reference] + sample_list
+    if count_orphans:
+        pileup_args = ['samtools', 'mpileup', '-A', '-f', reference] + sample_list
+    else:
+        pileup_args = ['samtools', 'mpileup', '-f', reference] + sample_list
     with open(mpileup_file, 'w+') as pileup_out:
         run(pileup_args, stdout=pileup_out)
 
