@@ -578,6 +578,7 @@ def compare(output_dir, bed_file, evaluation_regions, score_field, sample, no_cl
     qfy_args = [config['filePaths']['qfy.py'], '-t', 'ga4gh', '--verbose', '--adjust-conf-regions',
                 os.path.normpath(os.path.join(initial_path, evaluation_regions)), '--reference',
                 os.path.normpath(os.path.join(initial_path, reference)), '-o', os.path.split(output_dir)[-1],
+                '--write-vcf', '--write-counts',
                 os.path.join(os.path.basename(rtg_out), 'output.vcf.gz')]
     run(qfy_args)
     click.echo('Returning to %s...' % initial_path)
