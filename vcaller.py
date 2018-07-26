@@ -72,6 +72,18 @@ def cleanup(files_or_dirs):
         else:
             click.echo('Invalid input: %s is neither a file nor a directory...' % file_or_dir)
 
+def bed_intersect(vcf, bed, out=None, clean=False):
+    """
+    Intersect a vcf file with a bed file, obtaining a second vcf file with only the regions defined in the bed file.
+    """
+    if out is None:
+        out = remove_suffix(vcf)+'_exome.vcf'
+    with open(out, 'w+') as out:
+        click.echo('Intersecting vcf %s with bed file regions in %s...\n' % (vcf,bed))
+        run('bedtools', 'intersect', '-header', '-a', vcf, '-b', bed, stdout=out)
+    if clean:
+        cleanup(vcf)
+
 
 ##### MAIN GROUP #####
 @click.group()
@@ -92,6 +104,7 @@ def align():
 
 @align.command('bwa')
 @click.option('--output', '-o', default='bwa_out.bam', help='Name of the output file.')
+@click.option('--no-clean', is_flag=True, help='Do not remove intermidiary files')
 @click.option('--nthreads', '-t', default='1', help='Number of CPU threads to use during the alignment step.')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('read1', type=click.Path(exists=True))
@@ -104,7 +117,7 @@ def align_bwa(output, nthreads, reference, read1, read2):
     # Check if reference genome is already indexed
     suffix_list = ['.amb', '.ann', '.bwt', '.pac', '.sa']
     if check_existence([reference + suffix for suffix in suffix_list]):
-        click.echo('Index files already exist!\n Skipping reference genome indexing.')
+        click.echo('Index files already exist!\n Skipping reference genome indexing.\n')
     else:
         click.echo('Need to generate index files!\n Indexing reference genome %s...' % reference)
         run(['bwa', 'index', reference])
@@ -210,11 +223,12 @@ def call():
 @click.option('--output', '-o', default='gatk_out.vcf',
               help='Name of the output file (extension will be added automatically)')
 @click.option('--dbsnp', default=None, type=click.Path(exists=True), help='dbSNP file containing a database of '
-                                                                          'known SNPs.')
+                                                                          'known SNP IDs.')
+@click.option('--exome-regions', '-e', default=None, help='Bed file to restrict output regions to the exome.')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_gatk(output, dbsnp, reference, sample1, sample2):
+def call_gatk(output, dbsnp, exome_regions, reference, sample1, sample2):
     """Call variants using GATK's HaplotypeCaller.
     The GATK's HaplotypeCaller algorithm is used to call variants on aligned sequence files (samples).
 
@@ -263,15 +277,18 @@ def call_gatk(output, dbsnp, reference, sample1, sample2):
                     ['--dbsnp', dbsnp, '-O', output]
     run(gatk_args)
 
+    if exome_regions:
+        bed_intersect(output, exome_regions, clean=True)
 
 @call.command('bcftools')
-@click.option('--output', '-o', default='bcftools_out.vcf',
-              help='Name of the output file.')
-@click.option('--count-orphans', '-A', is_flag=True)
+@click.option('--output', '-o', default='bcftools_out.vcf', help='Name of the output file.')
+@click.option('--count-orphans', '-A', is_flag=True, help='Count reads with anomolous mate pairs.')
+@click.option('--exome-regions', '-e', default=None, help='Bed file to restrict output regions to the exome.')
+@click.option('--no-clean', is_flag=True, help='Do not remove intermidiary files')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_bcftools(output, count_orphans, reference, sample1, sample2):
+def call_bcftools(output, count_orphans, exome_regions, no_clean, reference, sample1, sample2):
     """Call variants using SAMtools's BCFtools.
 
     This command calls variants on input aligned sequence files (samples) after calculating their genotype likelihoods.
@@ -294,18 +311,21 @@ def call_bcftools(output, count_orphans, reference, sample1, sample2):
     call_args = ['bcftools', 'call', '-vmO', 'v', '-o', output, bcf_output]
     run(call_args)
 
-    # Remove intermediary files
-    click.echo('Cleaning up %s...' % bcf_output)
-    run(['rm', bcf_output])
+    if exome_regions:
+        bed_intersect(output, exome_regions, clean=True)
+
+    if no_clean is False:
+        cleanup(bcf_output)
 
 @call.command('varscan2')
 @click.option('--output', '-o', default='bcftools_out.vcf', help='Name of the output file.')
+@click.option('--count-orphans', '-A', is_flag=True, help='Count reads with anomolous mate pairs.')
+@click.option('--exome-regions', '-e', default=None, help='Bed file to restrict output regions to the exome.')
 @click.option('--no-clean', is_flag=True, help='Do not remove intermidiary files')
-@click.option('--count-orphans', '-A', is_flag=True)
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_tvc(output, no_clean, count_orphans, reference, sample1, sample2):
+def call_tvc(output, count_orphans, exome_regions, no_clean, reference, sample1, sample2):
     """Call variants using Varscan2.
 
     Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
@@ -329,19 +349,20 @@ def call_tvc(output, no_clean, count_orphans, reference, sample1, sample2):
     with open(output, 'w+') as call_out:
         run(call_args, stdout=call_out)
 
+    if exome_regions:
+        bed_intersect(output, exome_regions, clean=True)
+
     if no_clean is False:
-        click.echo('Cleaning up %s...' % mpileup_file)
-        run(['rm', mpileup_file])
+        cleanup(mpileup_file)
 
 
 @call.command('tvc')
 @click.option('--output-dir', '-o', default='.',
               help='Name of output directory; by default save to current directory.')
-@click.option('--target-file', '-t', default=None,
-              help='Only process targets in given bed file')
+@click.option('--exome-regions', '-e', default=None, help='Bed file to restrict output regions to the exome.')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample', type=click.Path(exists=True))
-def call_tvc(output_dir, target_file, reference, sample):
+def call_tvc(output_dir, exome_regions, reference, sample):
     """Call variants using TorrentVariantCaller (TVC).
     Only one sample sequence file can be specified. Sample sequence must have been previously aligned, so that it is
     in the SAM/BAM format. A reference genome must be provided.
@@ -349,18 +370,19 @@ def call_tvc(output_dir, target_file, reference, sample):
 
     click.echo('Calling variants on %s with TVC...' % sample)
     call_args = [config['filePaths']['tvc'], '-i', sample, '-r', reference, '-o', output_dir]
-    if target_file:
-        call_args += ['-b', target_file]
+    if exome_regions:
+        call_args += ['-b', exome_regions]
     run(call_args)
 
 
 @call.command('freebayes')
 @click.option('--output', '-o', default='freebayes_out.vcf',
               help='Name of the output file.')
+@click.option('--exome-regions', '-e', default=None, help='Bed file to restrict output regions to the exome.')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_freebayes(output, reference, sample1, sample2):
+def call_freebayes(output, exome_regions, reference, sample1, sample2):
     """Call variants using Freebayes.
     Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
     are in the SAM/BAM format. A reference genome must be provided.
@@ -372,6 +394,9 @@ def call_freebayes(output, reference, sample1, sample2):
     call_args = [config['filePaths']['freebayes'], '-f', reference] + sample_list
     with open(output, 'w+') as call_out:
         run(call_args, stdout=call_out)
+
+    if exome_regions:
+        bed_intersect(output, exome_regions, clean=True)
 
 
 ##### POST-PROCESSING #####
@@ -502,14 +527,6 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
             files_to_rmv += [rg_output]
         index_files = [replace_suffix(item, 'bai') for item in [file for file in files_to_rmv if '.bam' in file]]
         cleanup(files_to_rmv+index_files)
-
-
-##### PREP #####
-
-@cli.command('tabix', short_help='Quickly tabix gunzipped known files.')
-@click.argument('gzipped_files', required=True, type=click.Path(exists=True), nargs=-1)
-def tabix(gzipped_files):
-    tabix_index(gzipped_files)
 
 
 ##### COMPARE #####
