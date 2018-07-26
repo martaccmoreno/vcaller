@@ -44,16 +44,16 @@ def tabix_index(gzipped_files):
     if type(gzipped_files) is not list: gzipped_files = [gzipped_files]
     for file in gzipped_files:
         if '.gz' in file:
-            click.echo('Gunzipping %s...' % file)
+            click.echo('\nGunzipping %s...\n' % file)
             run(['gunzip', file])
-            click.echo('Compressing file %s using bgzip...' % file)
+            click.echo('\nCompressing file %s using bgzip...\n' % file)
             run(['bgzip', remove_suffix(file)])
-            click.echo('Indexing file %s using tabix....' % file)
+            click.echo('\nIndexing file %s using tabix....\n' % file)
             run(['tabix', file])
         else:
-            click.echo('Compressing file %s using bgzip...' % file)
+            click.echo('\nCompressing file %s using bgzip...\n' % file)
             run(['bgzip', file])
-            click.echo('Indexing file %s using tabix....' % file)
+            click.echo('\nIndexing file %s using tabix....\n' % file)
             run(['tabix', file + '.gz'])
 
 
@@ -62,14 +62,14 @@ def cleanup(files_or_dirs):
     Permanently remove one or more files or directories.
     """
     if type(files_or_dirs) is not list: files_or_dirs = [files_or_dirs]
-    click.echo('Removing the following files/directories: %s' % ', '.join(files_or_dirs))
+    click.echo('\nRemoving the following files/directories: %s\n' % ', '.join(files_or_dirs))
     for file_or_dir in files_or_dirs:
         if os.path.isfile(file_or_dir):
             run(['rm', file_or_dir])
         elif os.path.isdir(file_or_dir):
             run(['rm', '-r', file_or_dir])
         else:
-            click.echo('Invalid input: %s is neither a file nor a directory...' % file_or_dir)
+            click.echo('\nInvalid input: %s is neither a file nor a directory...\n' % file_or_dir)
 
 
 def bed_intersect(vcf, bed, out=None, clean=False):
@@ -79,7 +79,7 @@ def bed_intersect(vcf, bed, out=None, clean=False):
     if out is None:
         out = remove_suffix(vcf)+'_exome.vcf'
     with open(out, 'w+') as out:
-        click.echo('Intersecting vcf %s with bed file regions in %s...\n' % (vcf, bed))
+        click.echo('\nIntersecting vcf %s with bed file regions in %s...\n' % (vcf, bed))
         run('bedtools', 'intersect', '-header', '-a', vcf, '-b', bed, stdout=out)
     if clean:
         cleanup(vcf)
@@ -88,16 +88,17 @@ def bed_intersect(vcf, bed, out=None, clean=False):
 ### BROADCAST FUNCTIONS
 def broadcast_ref_index(suffixes, reference):
     if check_existence(suffixes):
-        click.echo('The following index files already exist:\n %s' % ' '.join(suffixes))
-        click.echo('Skipping reference genome indexing...\n')
+        click.echo('\nThe following index files already exist:\n %s' % ' '.join(suffixes))
+        click.echo('\nSkipping reference genome indexing...\n')
     else:
-        click.echo('Need to generate index files for %s!\n Indexing reference genome %s...\n' % reference)
+        click.echo('\nNeed to generate index files for %s!\nIndexing reference genome %s...\n' % (reference, reference))
+
 
 def broadcast_alignment(reads, reference):
     if len(reads) == 1:
-        click.echo('Aligning read %s against the reference genome %s...\n' % (reads[0]. reference))
+        click.echo('\nAligning read %s against the reference genome %s...\n' % (reads[0], reference))
     else:
-        click.echo('Aligning read(s) %s against the reference genome %s...\n' % (' '.join(reads), reference))
+        click.echo('\nAligning read(s) %s against the reference genome %s...\n' % (' '.join(reads), reference))
 
 
 ##### MAIN GROUP #####
@@ -148,7 +149,7 @@ def align_bowtie2(output, no_clean, reference, read1, read2):
         align_args += [read2]
     run(align_args)
 
-    click.echo('Sorting and converting %s to the BAM format...\n' % sam_output)
+    click.echo('\nSorting and converting %s to the BAM format...\n' % sam_output)
     sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', os.path.join('/tmp/', replace_suffix(
         os.path.basename(output)), 'tmp'), sam_output, sam_output]
     run(sort_args)
@@ -169,34 +170,30 @@ def align_bwa(output, nthreads, no_clean, reference, read1, read2):
     It is only mandatory to include the reference genome file and a sample read as arguments.
     If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
 
-    # Check if reference genome is already indexed
     suffix_list = ['.amb', '.ann', '.bwt', '.pac', '.sa']
-    if check_existence([reference + suffix for suffix in suffix_list]):
-        click.echo('Index files already exist!\n Skipping reference genome indexing.\n')
-    else:
-        click.echo('Need to generate index files!\n Indexing reference genome %s...' % reference)
+    suffixes = [remove_suffix(reference) + suffix for suffix in suffix_list]
+    broadcast_ref_index(suffixes, reference)
+    if not check_existence([reference + suffix for suffix in suffix_list]):
         run(['bwa', 'index', reference])
 
-    # Align input sequences to the reference genome
     sam_output = replace_suffix(output, 'sam')
     if check_existence([sam_output]):
-        click.echo('Aligned SAM read file already exists!')
+        click.echo('\nAligned reads SAM file already exists!\n')
     else:
-        click.echo('Aligning reads against the reference genome...')
+        broadcast_alignment([read1, read2], reference)
         align_args = ['bwa', 'mem', '-M', '-t', nthreads, reference, read1]
         if read2 is not None:
             align_args += [read2]
         with open(sam_output, "w+") as align_out:
             run(align_args, stdout=align_out)
 
-    click.echo('Sorting and converting to BAM...')
-    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', os.path.join('/tmp/', replace_suffix(
-        os.path.basename(output)), 'tmp'), sam_output]
+    click.echo('\nSorting and converting %s to the BAM format...\n' % sam_output)
+    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T',
+                 os.path.join('/tmp/', replace_suffix(os.path.basename(output), 'tmp')), sam_output]
     run(sort_args)
 
-    # Remove intermediary files
-    click.echo('Cleaning up %s...' % sam_output)
-    run(['rm', sam_output])
+    if no_clean is False:
+        cleanup(sam_output)
 
 
 @align.command('tmap')
