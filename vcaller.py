@@ -14,20 +14,9 @@ def flatten_list(list_of_list):
     """Flatten a list of list into a single list."""
     return [item for sublist in list_of_list for item in sublist]
 
-
-def check_existence(filename_list):
-    """Check if files with the filenames in the list already exist in the working directory."""
-    if type(filename_list) is str: filename_list = [filename_list]
-    if sum([os.path.isfile(ifile) for ifile in filename_list]) == len(filename_list):
-        return True
-    else:
-        return False
-
-
 def remove_suffix(file_name):
     """Remove the suffix of a filename, e.g. 'reference.fa' becomes 'reference'"""
     return '.'.join(file_name.split('.')[:-1])
-
 
 def replace_suffix(file_name, new_suffix):
     """
@@ -41,6 +30,13 @@ def replace_suffix(file_name, new_suffix):
     else:
         return remove_suffix(file_name) + '.' + new_suffix
 
+def check_existence(filename_list):
+    """Check if files with the filenames in the list already exist in the working directory."""
+    if type(filename_list) is str: filename_list = [filename_list]
+    if sum([os.path.isfile(ifile) for ifile in filename_list]) == len(filename_list):
+        return True
+    else:
+        return False
 
 def tabix_index(gzipped_files):
     if type(gzipped_files) is not list: gzipped_files = [gzipped_files]
@@ -97,6 +93,43 @@ def cli():
 
 ##### SEQUENCE ALIGNMENT #####
 
+@align.command('bowtie2')
+@click.option('--output', '-o', default='bowtie2_output.bam',
+              help='Name of the output file (extension will be added automatically)')
+@click.argument('reference', type=click.Path(exists=True))
+@click.argument('read1', type=click.Path(exists=True))
+@click.argument('read2', required=False, type=click.Path(exists=True))
+def align_bowtie2(output, reference, read1, read2):
+    """Use the FM-index tool bowtie2 for alignment. Requires bowtie2.
+    It is only mandatory to include the reference genome file and a sample read as arguments.
+    If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
+
+    suffix_list = ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', '.rev.1.bt2', '.rev.2.bt2']
+    suffixes = [remove_suffix(reference) + suffix for suffix in suffix_list]
+    if check_existence(suffixes):
+        click.echo('Index files already exist! Skipping reference genome indexing.')
+    else:
+        click.echo('Need to generate index files! Indexing reference genome %s...' % reference)
+        index_args = [config['filePaths']['bowtie2'] + '/bowtie2-build', reference, remove_suffix(reference)]
+        run(index_args)
+
+    click.echo('Aligning reads against the reference genome...')
+    sam_output = replace_suffix(output, 'sam')
+    align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', remove_suffix(reference), '-S', sam_output,
+                  read1]
+    if read2 is not None:
+        align_args += [read2]
+    run(align_args)
+
+    click.echo('Sorting and converting to BAM...')
+    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', os.path.join('/tmp/', replace_suffix(
+        os.path.basename(output)), 'tmp'), sam_output, sam_output]
+    run(sort_args)
+
+    # Remove intermediary files
+    cleanup(sam_output)
+
+
 @cli.group(short_help="Align sequences against reference genome.")
 def align():
     """Set of tools to align sequences against a reference genome of choice."""
@@ -144,44 +177,6 @@ def align_bwa(output, nthreads, reference, read1, read2):
     run(['rm', sam_output])
 
 
-@align.command('bowtie2')
-@click.option('--output', '-o', default='bowtie2_output.bam',
-              help='Name of the output file (extension will be added automatically)')
-@click.argument('reference', type=click.Path(exists=True))
-@click.argument('read1', type=click.Path(exists=True))
-@click.argument('read2', required=False, type=click.Path(exists=True))
-def align_bowtie2(output, reference, read1, read2):
-    """Use the FM-index tool bowtie2 for alignment. Requires bowtie2.
-    It is only mandatory to include the reference genome file and a sample read as arguments.
-    If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
-
-    suffix_list = ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', '.rev.1.bt2', '.rev.2.bt2']
-    suffixes = [remove_suffix(reference) + suffix for suffix in suffix_list]
-    if check_existence(suffixes):
-        click.echo('Index files already exist! Skipping reference genome indexing.')
-    else:
-        click.echo('Need to generate index files! Indexing reference genome %s...' % reference)
-        index_args = [config['filePaths']['bowtie2'] + '/bowtie2-build', reference, remove_suffix(reference)]
-        run(index_args)
-
-    click.echo('Aligning reads against the reference genome...')
-    sam_output = replace_suffix(output, 'sam')
-    align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', remove_suffix(reference), '-S', sam_output,
-                  read1]
-    if read2 is not None:
-        align_args += [read2]
-    run(align_args)
-
-    click.echo('Sorting and converting to BAM...')
-    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', os.path.join('/tmp/', replace_suffix(
-        os.path.basename(output)), 'tmp'), sam_output, sam_output]
-    run(sort_args)
-
-    # Remove intermediary files
-    click.echo('Cleaning up %s...' % sam_output)
-    run(['rm', sam_output])
-
-
 @align.command('tmap')
 @click.option('--output', '-o', default='tmap_output.bam',  # output will have to be redirected
               help='Name of the output file (extension will be added automatically)')
@@ -217,6 +212,68 @@ def align_tmap(output, reference, read1, read2):
 @cli.group(short_help='Call variants on mapped sequences.')
 def call():
     """Set of tools to call variants on files containing sequences previously aligned to a reference genome."""
+
+
+@call.command('bcftools')
+@click.option('--output', '-o', default='bcftools_out.vcf', help='Name of the output file.')
+@click.option('--count-orphans', '-A', is_flag=True, help='Count reads with anomolous mate pairs.')
+@click.option('--exome-regions', '-e', default=None, help='Bed file to restrict output regions to the exome.')
+@click.option('--no-clean', is_flag=True, help='Do not remove intermidiary files')
+@click.argument('reference', type=click.Path(exists=True))
+@click.argument('sample1', type=click.Path(exists=True))
+@click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
+def call_bcftools(output, count_orphans, exome_regions, no_clean, reference, sample1, sample2):
+    """Call variants using SAMtools's BCFtools.
+
+    This command calls variants on input aligned sequence files (samples) after calculating their genotype likelihoods.
+
+    Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
+    are in the SAM/BAM format. A reference genome must be provided.
+    """
+
+    sample_list = [sample1] + [s for s in sample2]
+    bcf_output = replace_suffix(output, 'bcf')
+
+    click.echo('Calculating genotype likelihoods for %s...' % ', '.join(sample_list))
+    if count_orphans:
+        mpileup_args = ['bcftools', 'mpileup', '-AOb', '-o', bcf_output, '-f', reference] + sample_list
+    else:
+        mpileup_args = ['bcftools', 'mpileup', '-Ob', '-o', bcf_output, '-f', reference] + sample_list
+    run(mpileup_args)
+
+    click.echo('Calling variants on %s with BCFtools...' % ', '.join(sample_list))
+    call_args = ['bcftools', 'call', '-vmO', 'v', '-o', output, bcf_output]
+    run(call_args)
+
+    if exome_regions:
+        bed_intersect(output, exome_regions, clean=True)
+
+    if no_clean is False:
+        cleanup(bcf_output)
+
+
+@call.command('freebayes')
+@click.option('--output', '-o', default='freebayes_out.vcf',
+              help='Name of the output file.')
+@click.option('--exome-regions', '-e', default=None, help='Bed file to restrict output regions to the exome.')
+@click.argument('reference', type=click.Path(exists=True))
+@click.argument('sample1', type=click.Path(exists=True))
+@click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
+def call_freebayes(output, exome_regions, reference, sample1, sample2):
+    """Call variants using Freebayes.
+    Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
+    are in the SAM/BAM format. A reference genome must be provided.
+    """
+
+    sample_list = [sample1] + [s for s in sample2]
+
+    click.echo('Calling variants on %s using Freebayes...' % ', '.join(sample_list))
+    call_args = [config['filePaths']['freebayes'], '-f', reference] + sample_list
+    with open(output, 'w+') as call_out:
+        run(call_args, stdout=call_out)
+
+    if exome_regions:
+        bed_intersect(output, exome_regions, clean=True)
 
 
 @call.command('gatk')
@@ -280,42 +337,25 @@ def call_gatk(output, dbsnp, exome_regions, reference, sample1, sample2):
     if exome_regions:
         bed_intersect(output, exome_regions, clean=True)
 
-@call.command('bcftools')
-@click.option('--output', '-o', default='bcftools_out.vcf', help='Name of the output file.')
-@click.option('--count-orphans', '-A', is_flag=True, help='Count reads with anomolous mate pairs.')
+
+@call.command('tvc')
+@click.option('--output-dir', '-o', default='.',
+              help='Name of output directory; by default save to current directory.')
 @click.option('--exome-regions', '-e', default=None, help='Bed file to restrict output regions to the exome.')
-@click.option('--no-clean', is_flag=True, help='Do not remove intermidiary files')
 @click.argument('reference', type=click.Path(exists=True))
-@click.argument('sample1', type=click.Path(exists=True))
-@click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_bcftools(output, count_orphans, exome_regions, no_clean, reference, sample1, sample2):
-    """Call variants using SAMtools's BCFtools.
-
-    This command calls variants on input aligned sequence files (samples) after calculating their genotype likelihoods.
-
-    Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
-    are in the SAM/BAM format. A reference genome must be provided.
+@click.argument('sample', type=click.Path(exists=True))
+def call_tvc(output_dir, exome_regions, reference, sample):
+    """Call variants using TorrentVariantCaller (TVC).
+    Only one sample sequence file can be specified. Sample sequence must have been previously aligned, so that it is
+    in the SAM/BAM format. A reference genome must be provided.
     """
 
-    sample_list = [sample1] + [s for s in sample2]
-    bcf_output = replace_suffix(output, 'bcf')
-
-    click.echo('Calculating genotype likelihoods for %s...' % ', '.join(sample_list))
-    if count_orphans:
-        mpileup_args = ['bcftools', 'mpileup', '-AOb', '-o', bcf_output, '-f', reference] + sample_list
-    else:
-        mpileup_args = ['bcftools', 'mpileup', '-Ob', '-o', bcf_output, '-f', reference] + sample_list
-    run(mpileup_args)
-
-    click.echo('Calling variants on %s with BCFtools...' % ', '.join(sample_list))
-    call_args = ['bcftools', 'call', '-vmO', 'v', '-o', output, bcf_output]
+    click.echo('Calling variants on %s with TVC...' % sample)
+    call_args = [config['filePaths']['tvc'], '-i', sample, '-r', reference, '-o', output_dir]
+    if exome_regions:
+        call_args += ['-b', exome_regions]
     run(call_args)
 
-    if exome_regions:
-        bed_intersect(output, exome_regions, clean=True)
-
-    if no_clean is False:
-        cleanup(bcf_output)
 
 @call.command('varscan2')
 @click.option('--output', '-o', default='bcftools_out.vcf', help='Name of the output file.')
@@ -354,49 +394,6 @@ def call_tvc(output, count_orphans, exome_regions, no_clean, reference, sample1,
 
     if no_clean is False:
         cleanup(mpileup_file)
-
-
-@call.command('tvc')
-@click.option('--output-dir', '-o', default='.',
-              help='Name of output directory; by default save to current directory.')
-@click.option('--exome-regions', '-e', default=None, help='Bed file to restrict output regions to the exome.')
-@click.argument('reference', type=click.Path(exists=True))
-@click.argument('sample', type=click.Path(exists=True))
-def call_tvc(output_dir, exome_regions, reference, sample):
-    """Call variants using TorrentVariantCaller (TVC).
-    Only one sample sequence file can be specified. Sample sequence must have been previously aligned, so that it is
-    in the SAM/BAM format. A reference genome must be provided.
-    """
-
-    click.echo('Calling variants on %s with TVC...' % sample)
-    call_args = [config['filePaths']['tvc'], '-i', sample, '-r', reference, '-o', output_dir]
-    if exome_regions:
-        call_args += ['-b', exome_regions]
-    run(call_args)
-
-
-@call.command('freebayes')
-@click.option('--output', '-o', default='freebayes_out.vcf',
-              help='Name of the output file.')
-@click.option('--exome-regions', '-e', default=None, help='Bed file to restrict output regions to the exome.')
-@click.argument('reference', type=click.Path(exists=True))
-@click.argument('sample1', type=click.Path(exists=True))
-@click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_freebayes(output, exome_regions, reference, sample1, sample2):
-    """Call variants using Freebayes.
-    Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
-    are in the SAM/BAM format. A reference genome must be provided.
-    """
-
-    sample_list = [sample1] + [s for s in sample2]
-
-    click.echo('Calling variants on %s using Freebayes...' % ', '.join(sample_list))
-    call_args = [config['filePaths']['freebayes'], '-f', reference] + sample_list
-    with open(output, 'w+') as call_out:
-        run(call_args, stdout=call_out)
-
-    if exome_regions:
-        bed_intersect(output, exome_regions, clean=True)
 
 
 ##### POST-PROCESSING #####
