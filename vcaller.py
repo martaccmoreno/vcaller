@@ -14,29 +14,31 @@ def flatten_list(list_of_list):
     """Flatten a list of list into a single list."""
     return [item for sublist in list_of_list for item in sublist]
 
+
 def remove_suffix(file_name):
     """Remove the suffix of a filename, e.g. 'reference.fa' becomes 'reference'"""
     return '.'.join(file_name.split('.')[:-1])
 
-def replace_suffix(file_name, new_suffix):
+
+def replace_suffix(filename, new_suffix):
     """
-    Replaces the suffix in a file's name with another user-specified suffix. For example:
-    file_name: 'reference.fa'
-    new_suffix:  '.fasta'
-    return: 'reference.fasta
+    Replaces a filename's suffix with another user-specified suffix.
     '"""
     if new_suffix[0] == '.':
-        return remove_suffix(file_name) + new_suffix
+        return remove_suffix(filename) + new_suffix
     else:
-        return remove_suffix(file_name) + '.' + new_suffix
+        return remove_suffix(filename) + '.' + new_suffix
+
 
 def check_existence(filename_list):
     """Check if files with the filenames in the list already exist in the working directory."""
-    if type(filename_list) is str: filename_list = [filename_list]
+    if type(filename_list) is str:
+        filename_list = [filename_list]
     if sum([os.path.isfile(ifile) for ifile in filename_list]) == len(filename_list):
         return True
     else:
         return False
+
 
 def tabix_index(gzipped_files):
     if type(gzipped_files) is not list: gzipped_files = [gzipped_files]
@@ -54,6 +56,7 @@ def tabix_index(gzipped_files):
             click.echo('Indexing file %s using tabix....' % file)
             run(['tabix', file + '.gz'])
 
+
 def cleanup(files_or_dirs):
     """
     Permanently remove one or more files or directories.
@@ -68,6 +71,7 @@ def cleanup(files_or_dirs):
         else:
             click.echo('Invalid input: %s is neither a file nor a directory...' % file_or_dir)
 
+
 def bed_intersect(vcf, bed, out=None, clean=False):
     """
     Intersect a vcf file with a bed file, obtaining a second vcf file with only the regions defined in the bed file.
@@ -81,67 +85,86 @@ def bed_intersect(vcf, bed, out=None, clean=False):
         cleanup(vcf)
 
 
+### BROADCAST FUNCTIONS
+def broadcast_ref_index(suffixes, reference):
+    if check_existence(suffixes):
+        click.echo('The following index files already exist:\n %s' % ' '.join(suffixes))
+        click.echo('Skipping reference genome indexing...\n')
+    else:
+        click.echo('Need to generate index files for %s!\n Indexing reference genome %s...\n' % reference)
+
+def broadcast_alignment(reads, reference):
+    if len(reads) == 1:
+        click.echo('Aligning read %s against the reference genome %s...\n' % (reads[0]. reference))
+    else:
+        click.echo('Aligning read(s) %s against the reference genome %s...\n' % (' '.join(reads), reference))
+
+
 ##### MAIN GROUP #####
 @click.group()
 @click.version_option()
 def cli():
-    """Vcaller
-    One-stop application that allows the user to leverage several existing bioinformatics tools that constitute variant
-    calling pipelines. If desired, the recommended settings for each command can be customized.
+    """
+    Vcaller, a CLI capable of evoking multiple pre-existing bioinformatics tools, ecletically grouping them into
+    commands and subcommands that will perform common variant calling and benchmarking routines.
     """
 
 
 ##### SEQUENCE ALIGNMENT #####
-
 @cli.group(short_help="Align sequences against reference genome.")
 def align():
-    """Set of tools to align sequences against a reference genome of choice."""
+    """Set of routines to align sequences against a reference genome of choice.
+    Read alignment requires two inputs: a reference genome, and reads to align against it.
+
+    In broad strokes, alignment of reads to a reference genome comprises two main steps: Indexing of the reference
+    genome (or reads), and the alignment process proper."""
+
 
 @align.command('bowtie2')
 @click.option('--output', '-o', default='bowtie2_output.bam',
               help='Name of the output file (extension will be added automatically)')
+@click.option('--no-clean', is_flag=True, help='Do not remove intermidiary files')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('read1', type=click.Path(exists=True))
 @click.argument('read2', required=False, type=click.Path(exists=True))
-def align_bowtie2(output, reference, read1, read2):
-    """Use the FM-index tool bowtie2 for alignment. Requires bowtie2.
-    It is only mandatory to include the reference genome file and a sample read as arguments.
+def align_bowtie2(output, no_clean, reference, read1, read2):
+    """Use the FM-index tool Bowtie 2 for alignment.
+    Requires Bowtie 2: http://bowtie-bio.sourceforge.net/bowtie2/index.shtml
+
     If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
 
     suffix_list = ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', '.rev.1.bt2', '.rev.2.bt2']
     suffixes = [remove_suffix(reference) + suffix for suffix in suffix_list]
-    if check_existence(suffixes):
-        click.echo('Index files already exist! Skipping reference genome indexing.')
-    else:
-        click.echo('Need to generate index files! Indexing reference genome %s...' % reference)
+    broadcast_ref_index(suffixes, reference)
+    if not check_existence(suffixes):
         index_args = [config['filePaths']['bowtie2'] + '/bowtie2-build', reference, remove_suffix(reference)]
         run(index_args)
 
-    click.echo('Aligning reads against the reference genome...')
     sam_output = replace_suffix(output, 'sam')
+    broadcast_alignment([read1, read2], reference)
     align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', remove_suffix(reference), '-S', sam_output,
                   read1]
     if read2 is not None:
         align_args += [read2]
     run(align_args)
 
-    click.echo('Sorting and converting to BAM...')
+    click.echo('Sorting and converting %s to the BAM format...\n' % sam_output)
     sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', os.path.join('/tmp/', replace_suffix(
         os.path.basename(output)), 'tmp'), sam_output, sam_output]
     run(sort_args)
 
-    # Remove intermediary files
-    cleanup(sam_output)
+    if no_clean is False:
+        cleanup(sam_output)
 
 
 @align.command('bwa')
 @click.option('--output', '-o', default='bwa_out.bam', help='Name of the output file.')
-@click.option('--no-clean', is_flag=True, help='Do not remove intermidiary files')
 @click.option('--nthreads', '-t', default='1', help='Number of CPU threads to use during the alignment step.')
+@click.option('--no-clean', is_flag=True, help='Do not remove intermidiary files')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('read1', type=click.Path(exists=True))
 @click.argument('read2', required=False, type=click.Path(exists=True))
-def align_bwa(output, nthreads, reference, read1, read2):
+def align_bwa(output, nthreads, no_clean, reference, read1, read2):
     """Use the BWA-MEM algorithm for alignment. Requires bwa.
     It is only mandatory to include the reference genome file and a sample read as arguments.
     If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
