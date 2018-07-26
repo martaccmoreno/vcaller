@@ -75,7 +75,7 @@ def bed_intersect(vcf, bed, out=None, clean=False):
     if out is None:
         out = remove_suffix(vcf)+'_exome.vcf'
     with open(out, 'w+') as out:
-        click.echo('Intersecting vcf %s with bed file regions in %s...\n' % (vcf,bed))
+        click.echo('Intersecting vcf %s with bed file regions in %s...\n' % (vcf, bed))
         run('bedtools', 'intersect', '-header', '-a', vcf, '-b', bed, stdout=out)
     if clean:
         cleanup(vcf)
@@ -92,6 +92,10 @@ def cli():
 
 
 ##### SEQUENCE ALIGNMENT #####
+
+@cli.group(short_help="Align sequences against reference genome.")
+def align():
+    """Set of tools to align sequences against a reference genome of choice."""
 
 @align.command('bowtie2')
 @click.option('--output', '-o', default='bowtie2_output.bam',
@@ -128,11 +132,6 @@ def align_bowtie2(output, reference, read1, read2):
 
     # Remove intermediary files
     cleanup(sam_output)
-
-
-@cli.group(short_help="Align sequences against reference genome.")
-def align():
-    """Set of tools to align sequences against a reference genome of choice."""
 
 
 @align.command('bwa')
