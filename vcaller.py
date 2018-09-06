@@ -1,10 +1,5 @@
-import json
-import os
-from subprocess import run, getstatusoutput
-import subprocess
-import click
-import pipes
 from vcaller_funcs import *
+from auxiliary_funcs import remove_suffix
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(current_dir, 'config.json'), 'r') as data_file:
@@ -44,35 +39,28 @@ def align():
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('read1', type=click.Path(exists=True))
 @click.argument('read2', required=False, type=click.Path(exists=True))
-def align_bowtie2(output, no_clean, reference, read1, read2):
+def align_bowtie2(output, reference, read1, read2, no_clean):
     """Use the FM-index tool Bowtie 2 for alignment.
     Requires Bowtie 2: http://bowtie-bio.sourceforge.net/bowtie2/index.shtml
 
     If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
-
     if read2 is None:
-        return func_align_bowtie2(output, no_clean, reference, read1)
+        func_align_bowtie2(output, reference, read1, no_clean)
     else:
-        return func_align_bowtie2(output, no_clean, reference, read1, read2)
-
+        func_align_bowtie2(output, reference, read1, read2, no_clean)
 
 
 @align.command('bwa')
 @click.option('--output', '-o', default='bwa_out.bam', help='Name of the output file.')
-@click.option('--nthreads', '-t', default='1', help='Number of CPU threads to use during the alignment step.')
 @click.option('--no-clean', is_flag=True, help='Do not remove intermidiary files')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('read1', type=click.Path(exists=True))
-@click.argument('read2', required=False, type=click.Path(exists=True))
-def align_bwa(output, nthreads, no_clean, reference, read1, read2):
+@click.argument('read2', required=False, default='')
+def align_bwa(output, reference, read1, read2, no_clean):
     """Use the BWA-MEM algorithm for alignment. Requires bwa.
     It is only mandatory to include the reference genome file and a sample read as arguments.
     If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
-
-    if read2 is None:
-        return func_align_bwa(output, nthreads, no_clean, reference, read1)
-    else:
-        return func_align_bwa(output, nthreads, no_clean, reference, read1, read2)
+    func_align_bwa(output, reference, read1, read2, no_clean)
 
 
 @align.command('tmap')
@@ -85,11 +73,10 @@ def align_tmap(output, reference, read1, read2):
     """Use the Ion Torrent-specific aligner TMAP.
     It is only mandatory to include the reference genome file and the reads of a sample as arguments.
     If dealing with paired-end reads, a second sequence file containing the second mate-pair read may be included."""
-
     if read2 is None:
-        return func_align_tmap(output, reference, read1)
+        func_align_tmap(output, reference, read1)
     else:
-        return func_align_tmap(output, reference, read1, read2)
+        func_align_tmap(output, reference, read1, read2)
 
 
 #######################
@@ -109,7 +96,7 @@ def call():
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_bcftools(output, count_orphans, exome_regions, no_clean, reference, sample1, sample2):
+def call_bcftools(output, exome_regions, reference, sample1, sample2, count_orphans, no_clean):
     """Call variants using SAMtools's BCFtools.
 
     This command calls variants on input aligned sequence files (samples) after calculating their genotype likelihoods.
@@ -117,26 +104,7 @@ def call_bcftools(output, count_orphans, exome_regions, no_clean, reference, sam
     Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
     are in the SAM/BAM format. A reference genome must be provided.
     """
-
-    sample_list = [sample1] + [s for s in sample2]
-    bcf_output = replace_suffix(output, 'bcf')
-
-    click.echo('Calculating genotype likelihoods for %s...' % ', '.join(sample_list))
-    if count_orphans:
-        mpileup_args = ['bcftools', 'mpileup', '-AOb', '-o', bcf_output, '-f', reference] + sample_list
-    else:
-        mpileup_args = ['bcftools', 'mpileup', '-Ob', '-o', bcf_output, '-f', reference] + sample_list
-    run(mpileup_args)
-
-    click.echo('Calling variants on %s with BCFtools...' % ', '.join(sample_list))
-    call_args = ['bcftools', 'call', '-vmO', 'v', '-o', output, bcf_output]
-    run(call_args)
-
-    if exome_regions:
-        bed_intersect(output, exome_regions, clean=True)
-
-    if no_clean is False:
-        cleanup(bcf_output)
+    func_call_bcftools(output, count_orphans, exome_regions, no_clean, reference, sample1, sample2)
 
 
 @call.command('freebayes')
@@ -151,16 +119,7 @@ def call_freebayes(output, exome_regions, reference, sample1, sample2):
     Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
     are in the SAM/BAM format. A reference genome must be provided.
     """
-
-    sample_list = [sample1] + [s for s in sample2]
-
-    click.echo('Calling variants on %s using Freebayes...' % ', '.join(sample_list))
-    call_args = [config['filePaths']['freebayes'], '-f', reference] + sample_list
-    with open(output, 'w+') as call_out:
-        run(call_args, stdout=call_out)
-
-    if exome_regions:
-        bed_intersect(output, exome_regions, clean=True)
+    func_call_freebayes(output, exome_regions, reference, sample1, sample2)
 
 
 @call.command('gatk')
@@ -186,43 +145,7 @@ def call_gatk(output, dbsnp, exome_regions, reference, sample1, sample2):
     on input files: it ensures that the reference has been indexed through samtools faidx and had a dictionary
     generated through Picard's CreateSequenceDictionary, then it applies the samtools index command on each sample.
     """
-
-    if check_existence([reference + '.fai']):
-        click.echo('Reference faidx index file already exists! Skipping faidx indexing.')
-    else:
-        click.echo('Indexing reference file %s...' % reference)
-        run(['samtools', 'faidx', reference])
-
-    dict_file = replace_suffix(reference, 'dict')
-    if check_existence([dict_file]):
-        click.echo(
-            'Dictionary file %s already exists. Skipping reference genome dictionary file generation.' % dict_file)
-    else:
-        click.echo('Generating reference genome dictionary %s...' % dict_file)
-        dict_vars = ['java', '-jar', config['filePaths']['picard'], 'CreateSequenceDictionary', 'R=%s' % reference,
-                     'O=%s' % dict_file]
-        run(dict_vars)
-
-    sample_list = [sample1] + [s for s in sample2]
-    for smpl in sample_list:
-        if check_existence([replace_suffix(smpl, 'bai')]) or check_existence(smpl + '.bai'):
-            click.echo('Sample index .bai files already exist! Skipping sample indexing.')
-        else:
-            click.echo('Need to generate sample index .bai file!\nIndexing sample file %s...' % smpl)
-            run(['samtools', 'index', smpl])
-
-    click.echo('Calling variants on samples %s with GATK-HC...' % ', '.join(sample_list))
-    if dbsnp is None:
-        gatk_args = [config['filePaths']['gatk4'], 'HaplotypeCaller', '-R', reference] + \
-                    flatten_list([['-I'] + [sample_list[i]] for i in range(len(sample_list))]) + ['-O', output]
-    else:
-        gatk_args = [config['filePaths']['gatk4'], 'HaplotypeCaller', '-R', reference] + \
-                    flatten_list([['-I'] + [sample_list[i]] for i in range(len(sample_list))]) + \
-                    ['--dbsnp', dbsnp, '-O', output]
-    run(gatk_args)
-
-    if exome_regions:
-        bed_intersect(output, exome_regions, clean=True)
+    func_call_gatk(output, dbsnp, exome_regions, reference, sample1, sample2)
 
 
 @call.command('tvc')
@@ -236,12 +159,7 @@ def call_tvc(output_dir, exome_regions, reference, sample):
     Only one sample sequence file can be specified. Sample sequence must have been previously aligned, so that it is
     in the SAM/BAM format. A reference genome must be provided.
     """
-
-    click.echo('Calling variants on %s with TVC...' % sample)
-    call_args = [config['filePaths']['tvc'], '-i', sample, '-r', reference, '-o', output_dir]
-    if exome_regions:
-        call_args += ['-b', exome_regions]
-    run(call_args)
+    func_call_tvc(output_dir, exome_regions, reference, sample)
 
 
 @call.command('varscan2')
@@ -252,35 +170,13 @@ def call_tvc(output_dir, exome_regions, reference, sample):
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_tvc(output, count_orphans, exome_regions, no_clean, reference, sample1, sample2):
+def call_varscan2(output, count_orphans, exome_regions, no_clean, reference, sample1, sample2):
     """Call variants using Varscan2.
 
     Only one sample sequence file has to be specified. Sample sequences must have been previously aligned, so that they
     are in the SAM/BAM format. A reference genome must be provided.
     """
-
-    sample_list = [sample1] + [s for s in sample2]
-
-    click.echo('Creating mpipleup file using %s...' % ', '.join(sample_list))
-    mpileup_file = replace_suffix(output, 'pileup')
-    if count_orphans:
-        pileup_args = ['samtools', 'mpileup', '-A', '-f', reference] + sample_list
-    else:
-        pileup_args = ['samtools', 'mpileup', '-f', reference] + sample_list
-    with open(mpileup_file, 'w+') as pileup_out:
-        run(pileup_args, stdout=pileup_out)
-
-    click.echo('Calling variants on %s with Varscan2...' % mpileup_file)
-    call_args = ['java', '-jar', config['filePaths']['varscan2'], 'mpileup2cns', mpileup_file, '--output-vcf', '1',
-                 '--variants', '1', '--p-value', '0.10', '--min-coverage', '2']
-    with open(output, 'w+') as call_out:
-        run(call_args, stdout=call_out)
-
-    if exome_regions:
-        bed_intersect(output, exome_regions, clean=True)
-
-    if no_clean is False:
-        cleanup(mpileup_file)
+    func_call_varscan2(output, count_orphans, exome_regions, no_clean, reference, sample1, sample2)
 
 
 ##### POST-PROCESSING #####
@@ -290,12 +186,9 @@ def call_tvc(output, count_orphans, exome_regions, no_clean, reference, sample1,
 @click.option('--output-dir', '-d', default=None,
               help='Name of output directory; by default save in the same directory as the final output.')
 @click.option('--readgroup-info', default='ID:42,PU:123,PL:ILLUMINA,SM:sample1,LB:1',
-              type=str, help='Add read group information  to the sample, which MUST '
-                                                               'follow the format below:\n'
-                                                               'ID:identifier,PU:platform_unit,' '\n'
-                                                               'PL:platform,SM:sample,LB:library' '\n')
-@click.option('--add-known-snps', '-s', default='', help='Additional files containing known SNP information.',
-              multiple=True)
+              type=str, help='Add read group information  to the sample, which MUST follow the format below:\n '
+                             'ID:identifier,PU:platform_unit,' '\n'
+                             'PL:platform,SM:sample,LB:library' '\n')
 @click.option('--add-known-indels', '-i', default='', help='Additional files containing known indel information.',
               multiple=True)
 @click.option('--no-clean', is_flag=True, help='Do not remove intermidiary files')
@@ -304,120 +197,18 @@ def call_tvc(output, count_orphans, exome_regions, no_clean, reference, sample1,
 @click.argument('known-snps', required=True, type=click.Path(exists=True))
 @click.argument('reference', required=True, type=click.Path(exists=True))
 @click.argument('sample', required=True, type=click.Path(exists=True))
-def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_indels, no_clean, known_indels, known_snps,
-            reference,
-            sample):
+def process(output_name, output_dir, readgroup_info, add_known_indels, no_clean, known_indels,
+            known_snps, reference, sample):
     """Performs a group of steps for the post-processing in preparation for variant calling
     on one SAM/BAM sampl file. A must do for running the gatk subcommand under call."""
-
-    if output_dir is None:
-        output_dir = os.path.dirname(output_name)
-    smpl_name, smpl_extension = remove_suffix(os.path.basename(sample)), '.' + sample.split('.')[-1]
-
-    if not check_existence(reference + '.fai'):
-        click.echo('Generating faidx index for %s...' % reference)
-        run(['samtools', 'faidx', reference])
-    if not check_existence([remove_suffix(reference) + '.dict']):
-        click.echo('Generating sequence dictionary for %s...' % reference)
-        run([config['filePaths']['gatk4'], 'CreateSequenceDictionary', '-R', reference])
-
-    if (smpl_extension is not '.bam') or (getstatusoutput('samtools index ' + sample)[0] != 0):
-        sorted_output = replace_suffix(sample, 'bam')
-        if not check_existence([sorted_output]):
-            click.echo('Sorting and converting %s to BAM...' % sample)
-            sort_args = ['samtools', 'sort', '-O', 'bam', '-o', sorted_output, '-T',
-                         os.path.join('/tmp/', smpl_name + '.temp'), sample]
-            run(sort_args)
-            click.echo('Indexing %s...' % sorted_output)
-            run(['samtools', 'index', sorted_output])
-        sample = sorted_output
-
-    if check_existence(sample + '.bai'):  # to avoid unnecessary 'file not found' errors
-        run(['rm', sample + '.bai'])
-
-    # dedupping
-    dup_output = os.path.join(output_dir, smpl_name + '.DUP.bam')
-    dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', sample,
-                '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
-                '-M', os.path.join(output_dir, smpl_name + '.metrics')]
-    if readgroup_info:
-        # More info on RGs: https://gatkforums.broadinstitute.org/gatk/discussion/6472/read-groups
-        rg_output = os.path.join(output_dir, smpl_name + '.RG.bam')
-        if not check_existence(rg_output):
-            click.echo('Adding Read Group information to %s...' % sample)
-            rg_info = readgroup_info.split(',')
-            read_groups = {'ID': rg_info[0].split(':')[1], 'PU': rg_info[1].split(':')[1],
-                           'PL': rg_info[2].split(':')[1], 'SM': rg_info[3].split(':')[1],
-                           'LB': rg_info[4].split(':')[1]}
-            rg_args = [config['filePaths']['gatk4'], 'AddOrReplaceReadGroups', '-I', sample,
-                       '-O', rg_output, '-RGID', read_groups['ID'], '-RGLB', read_groups['LB'],
-                       '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM'],
-                       '-SO', 'coordinate']
-            run(rg_args)
-        dup_output = replace_suffix(rg_output, '.DUP') + '.bam'
-        dup_args = [config['filePaths']['gatk4'], 'MarkDuplicates', '-I', rg_output,
-                    '-O', dup_output, '-REMOVE_DUPLICATES', 'True',
-                    '-M', os.path.join(output_dir, smpl_name + '.metrics')]
-
-    if not check_existence(dup_output):
-        click.echo('Marking and removing duplicates for %s...' % sample)
-        run(dup_args)
-
-    if not check_existence(dup_output+'.bai'):
-        run(['samtools', 'index', dup_output])
-
-    # Realign around indels; using gatk3 because of this step
-    # https://gatkforums.broadinstitute.org/gatk/discussion/11455/realignertargetcreator-and-indelrealigner
-    intervals_output = os.path.join(output_dir, smpl_name + '.intervals')
-    if not check_existence([intervals_output]):
-        click.echo('Creating indel realignment intervals for %s...' % sample)
-        intervals_args = ['java', '-jar', config['filePaths']['gatk3'], '-T', 'RealignerTargetCreator', '-R', reference,
-                          '-I', dup_output, '-o', intervals_output, '--known',
-                          known_indels]
-        run(intervals_args)
-    realign_output = replace_suffix(dup_output, 'RLGN') + '.bam'
-    if not check_existence([realign_output]):
-        click.echo('Applying indel realignment based on the intervals for %s...' % sample)
-        realign_args = ['java', '-jar', config['filePaths']['gatk3'], '-T', 'IndelRealigner', '-R', reference,
-                        '-I', dup_output, '-targetIntervals', intervals_output, '-known', known_indels] + \
-                       flatten_list([['-known'] + [add_known_indels[i]] for i in range(len(add_known_indels))]) + \
-                       ['-o', realign_output]
-        run(realign_args)
-
-    # BQSR
-    table_output = os.path.join(output_dir, smpl_name + '.table')
-    if not check_existence([table_output]):
-        click.echo('Creating base score recalibration table for %s...' % sample)
-        table_args = [config['filePaths']['gatk4'], 'BaseRecalibrator', '-R', reference,
-                      '--known-sites', known_snps] + \
-                     flatten_list([['--known-sites'] + [add_known_snps[i]] for i in range(len(add_known_snps))]) + \
-                     ['-I', realign_output, '-O', table_output]
-        run(table_args)
-    if output_name is None:
-        bqsr_output = os.path.join(output_dir, smpl_name + '.processed.bam')
-    else:
-        bqsr_output = output_name
-    if not check_existence([bqsr_output]):
-        click.echo('Running base score recalibration on %s...' % sample)
-        bqsr_args = [config['filePaths']['gatk4'], 'ApplyBQSR',
-                     '-I', realign_output, '-bqsr', table_output, '-O', bqsr_output]
-        run(bqsr_args)
-
-    # clean up intermediary files -- but only after we have the final file
-    # still not working 100% -- IT STILL RUNS EVEN IF BSQR WASN'T SUCCESSFUL
-    if check_existence([bqsr_output]) and no_clean is False:
-        files_to_rmv = [dup_output, intervals_output, realign_output, table_output,
-                    os.path.join(output_dir, smpl_name + '.metrics')]
-        if readgroup_info:
-            files_to_rmv += [rg_output]
-        index_files = [replace_suffix(item, 'bai') for item in [file for file in files_to_rmv if '.bam' in file]]
-        cleanup(files_to_rmv+index_files)
+    func_process(output_name, output_dir, readgroup_info, add_known_indels, known_indels, known_snps, reference,
+                 sample, no_clean)
 
 
 ##### COMPARE #####
 @cli.command('compare', short_help='Compare two sets of called variants, '
                                    'with one of them being assumed to be the baseline set.')
-@click.option('--output-dir', '-o', default='comparison', # change to just output
+@click.option('--output-dir', '-o', default='comparison',  # change to just output
               help='Name of the output directory.')
 @click.option('--bed-file', '-b', default=None, help='Only consider variants found in the regions defined by'
                                                      'the provided bed file.')
@@ -431,7 +222,7 @@ def process(output_name, output_dir, readgroup_info, add_known_snps, add_known_i
 @click.argument('reference', required=True, type=click.Path(exists=True))
 @click.argument('baseline', required=True, type=click.Path(exists=True))
 @click.argument('calls', required=True, type=click.Path(exists=True))
-def compare(output_dir, bed_file, evaluation_regions, score_field, sample, no_clean, reference, baseline, calls):
+def compare(output_dir, bed_file, evaluation_regions, score_field, sample, reference, baseline, calls, no_clean):
     """
     Evokes rtgtool's vcfeval to compare a set of baseline calls against a set of query calls, outputting a GA4GH-compliant
     annotated VCF. Next, this VCF is passed into hap.py's qfy.py method in order to compute metrics, namely raw counts
@@ -442,56 +233,14 @@ def compare(output_dir, bed_file, evaluation_regions, score_field, sample, no_cl
     To select a pair of samples from each variant data set, use the format <baseline_sample>,<calls_sample>.
     """
 
-    # The reference genome must be converted to SDF
-    sdf_ref = os.path.join(replace_suffix(reference, 'sdf'))
-    if os.path.isdir(sdf_ref) is False:
-        click.echo('Converting reference genome %s to the SDF format...' % reference)
-        fastq2sdf_args = [config['filePaths']['rtg'], 'format', '-o', sdf_ref, reference]
-        run(fastq2sdf_args)
-    else:
-        click.echo('Reference genome %s has already been convert to the SDF format under %s' %
-                   (os.path.basename(reference), sdf_ref))
+    func_compare(output_dir, bed_file, evaluation_regions, score_field, sample,
+                 reference, baseline, calls, no_clean)
 
-    # Check if baseline and calls are tabix-indexed as this is a must for using vcfeval
-    if not check_existence(baseline + '.tbi'):
-        tabix_index(baseline)
-        baseline += '.gz'
-    if not check_existence(calls + '.tbi'):
-        tabix_index(calls)
-        calls += '.gz'
-
-    click.echo('Creating directory %s...' % output_dir)
-
-    # Create GA4GH-compliant annotated VCFs
-    rtg_out = os.path.join(output_dir, os.path.split(output_dir)[-1] + '-vcfeval')
-    if not os.path.isdir(rtg_out):
-        click.echo('Comparing baseline %s against call set %s using vcfeval...' % (baseline, calls))
-        rtg_args = [config['filePaths']['rtg'], 'vcfeval', '-o', rtg_out, '--vcf-score-field',
-                    score_field, '--template', sdf_ref, '--baseline', baseline, '--calls', calls, '-m', 'ga4gh']
-        if bed_file is not None: rtg_args += ['--bed-regions', bed_file]
-        if evaluation_regions is not None: rtg_args += ['--evaluation-regions', evaluation_regions]
-        if sample is not None: rtg_args += ['--sample', sample]
-        run(rtg_args)
-
-    click.echo('Moving to directory %s...' % output_dir)
-    initial_path = os.getcwd()
-    os.chdir(output_dir)
-    click.echo('Running qfy.py on %s...' % os.path.join(rtg_out, 'output.vcf.gz'))
-    qfy_args = [config['filePaths']['qfy.py'], '-t', 'ga4gh', '--verbose', '--adjust-conf-regions',
-                os.path.normpath(os.path.join(initial_path, evaluation_regions)), '--reference',
-                os.path.normpath(os.path.join(initial_path, reference)), '-o', os.path.split(output_dir)[-1],
-                '--write-vcf', '--write-counts',
-                os.path.join(os.path.basename(rtg_out), 'output.vcf.gz')]
-    run(qfy_args)
-    click.echo('Returning to %s...' % initial_path)
-    os.chdir(initial_path)
-
-    if no_clean is False:
-        cleanup(rtg_out)
 
 ##### PIPELINE #####
 @cli.command('run', short_help='bla')
-@click.option('--output', '-o', default='processed.bam', help='Name of the final output file.')
+@click.option('--output', '-o', default='calls.vcf', help='Name of the final VCF output file.')
+@click.option('--exome-regions', '-e', default=None, help='Bed file to restrict output regions to the exome.')
 @click.option('--add-known-indels', '-i', default='', help='Additional files containing known indel information.',
               multiple=True)
 @click.option('--readgroup-info', default='ID:42,PU:123,PL:ILLUMINA,SM:sample1,LB:1',
@@ -505,29 +254,38 @@ def compare(output_dir, bed_file, evaluation_regions, score_field, sample, no_cl
 @click.argument('known-snps', type=click.Path(exists=True))
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('read1', type=click.Path(exists=True))
-@click.argument('read2', required=False, type=click.Path(exists=True))
-@click.pass_context
-def run(ctx, output, add_known_indels, readgroup_info, aligner, caller, known_indels, known_snps, reference, read1, read2):
-    ctx.invoke(align_bwa, reference, read1, read2, output='bwa.out', no_clean=False)
-
+@click.argument('read2', required=False, default='')
+def run(output, exome_regions, add_known_indels, readgroup_info, aligner, caller, known_indels, known_snps,
+        reference, read1, read2):
     align_out = aligner+'_out.bam'
     process_out = aligner+'_out.bam.processed.bam'
 
-    align_args = ['vcaller', 'align', aligner, 'reference', 'read1', 'read2']
-    process_args = ['vcaller', 'process', '-o', process_out, '--readgroup-info', readgroup_info,
-                    '--add-known-indels', add_known_indels, known_indels, known_snps, reference, align_out]
-    call_args = ['vcaller', 'call', caller, '-o', output, reference, process_out]
+    # align
+    if aligner.lower() == 'bowtie2':
+        func_align_bowtie2(align_out, reference, read1, read2)
+    elif aligner.lower() == 'bwa':
+        func_align_bwa(align_out, reference, read1, read2)
+    elif aligner.lower() == 'tmap':
+        func_align_tmap(align_out, reference, read1, read2)
+    else:
+        raise ValueError('The chosen aligner is not valid. Try one of the following: "bowtie2", "bwa", or "tmap".')
 
-    print(align_args)
-    run(align_args)
-    run(process_args)
-    run(call_args)
-    cleanup([align_out, process_out])
+    # process
+    func_process(process_out, '.', readgroup_info, add_known_indels, known_indels, known_snps, reference, align_out)
+
+    # call
+    if caller.lower() == 'bcftools':
+        func_call_bcftools(output, exome_regions, reference, process_out)
+    elif caller.lower() == 'freebayes':
+        func_call_freebayes(output, exome_regions, reference, process_out)
+    elif caller.lower() == 'gatk':
+        func_call_gatk(output, known_snps, exome_regions, reference, process_out)
+    elif caller.lower() == 'tvc':
+        func_call_tvc(remove_suffix(output), exome_regions, reference, process_out)
+    else:
+        raise ValueError('The chosen caller is not valid. Try one of the following: "bcftools", "freebayes", '
+                         '"gatk", or "tvc".')
+
+    return 'Finished!'
 
 
-    # t = pipes.Template()
-    # t.append('vcaller align %s %s %s %s' % (aligner, reference, read1, read2), '--')
-    # t.append('vcaller call %s %s %s' % (caller, reference, '-'), '--')
-    # t.append('vcaller process -o %s --readgroup-info %s --add-known-indels %s %s %s %s %s' %
-    #          (output, readgroup_info, add_known_indels, known_indels, known_snps, reference, '-'), '--')
-    # f = t.open('pipefile', 'w')
