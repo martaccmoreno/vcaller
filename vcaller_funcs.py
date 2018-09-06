@@ -33,8 +33,8 @@ def func_align_bowtie2(output, reference, read1, read2='', no_clean=False):
     subprocess.run(align_args)
 
     click.echo('\nSorting and converting %s to the BAM format...\n' % sam_output)
-    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T', os.path.join('/tmp/', replace_suffix(
-        os.path.basename(output)), 'tmp'), sam_output, sam_output]
+    sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T',
+                 os.path.join('/tmp/', replace_suffix(os.path.basename(output), 'tmp')), sam_output, sam_output]
     subprocess.run(sort_args)
 
     if no_clean is False:
