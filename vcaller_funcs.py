@@ -34,8 +34,10 @@ def func_align_bowtie2(output, reference, read1, read2='', no_clean=False):
 
     click.echo('\nSorting and converting %s to the BAM format...\n' % sam_output)
     sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T',
-                 os.path.join('/tmp/', replace_suffix(os.path.basename(output), 'tmp')), sam_output, sam_output]
-    subprocess.run(sort_args)
+                 os.path.join('/tmp/', replace_suffix(os.path.basename(output), 'tmp')), sam_output, output]
+    broadcast_sort_convert(sam_output)
+    if not check_existence([sam_output]):
+        subprocess.run(sort_args)
 
     if no_clean is False:
         cleanup(sam_output)
@@ -61,8 +63,10 @@ def func_align_bwa(output, reference, read1, read2='', no_clean=False):
 
     click.echo('\nSorting and converting %s to the BAM format...' % sam_output)
     sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T',
-                 os.path.join('/tmp/', replace_suffix(os.path.basename(output), 'tmp')), sam_output]
-    subprocess.run(sort_args)
+                 os.path.join('/tmp/', replace_suffix(os.path.basename(output), 'tmp')), sam_output, output]
+    broadcast_sort_convert(sam_output)
+    if not check_existence([sam_output]):
+        subprocess.run(sort_args)
 
     if no_clean is False:
         cleanup(sam_output)
@@ -71,10 +75,8 @@ def func_align_bwa(output, reference, read1, read2='', no_clean=False):
 def func_align_tmap(output, reference, read1, read2=''):
     suffix_list = ['.tmap.anno', '.tmap.bwt', '.tmap.pac', '.tmap.sa']
     suffixes = [reference + suffix for suffix in suffix_list]
-    if check_existence(suffixes):
-        click.echo('Index files already exist! Skipping reference genome indexing.')
-    else:
-        click.echo('Need to generate index files! Indexing reference genome %s...' % reference)
+    broadcast_ref_index(suffixes, reference)
+    if not check_existence([reference + suffix for suffix in suffix_list]):
         index_args = [config['filePaths']['tmap'], 'index', '-f', reference]
         subprocess.run(index_args)
 
@@ -84,9 +86,10 @@ def func_align_tmap(output, reference, read1, read2=''):
             align_args += [read2]
         if 'gz' in read1.split('.') or 'gz' in read2.split('.'):
             align_args += ['--input-gz']
-        click.echo('Aligning reads against the reference genome...')
-        with open(output, "w+") as align_out:
-            subprocess.run(align_args, stdout=align_out)
+        broadcast_alignment([read1, read2], reference, output)
+        if not check_existence([output]):
+            with open(output, "w+") as align_out:
+                subprocess.run(align_args, stdout=align_out)
 
 
 ### VARIANT CALLERS ###
@@ -94,14 +97,14 @@ def func_call_bcftools(output, exome_regions, reference, sample1, sample2='', co
     sample_list = [sample1] + [s for s in sample2]
     bcf_output = replace_suffix(output, 'bcf')
 
-    click.echo('Calculating genotype likelihoods for %s...' % ', '.join(sample_list))
+    click.echo("Calculating genotype likelihoods for %s..." % ', '.join(sample_list))
     if count_orphans:
         mpileup_args = ['bcftools', 'mpileup', '-AOb', '-o', bcf_output, '-f', reference] + sample_list
     else:
         mpileup_args = ['bcftools', 'mpileup', '-Ob', '-o', bcf_output, '-f', reference] + sample_list
     subprocess.run(mpileup_args)
 
-    click.echo('Calling variants on %s with BCFtools...' % ', '.join(sample_list))
+    broadcast_calling(sample_list, "BCFtools")
     call_args = ['bcftools', 'call', '-vmO', 'v', '-o', output, bcf_output]
     subprocess.run(call_args)
 
@@ -115,7 +118,7 @@ def func_call_bcftools(output, exome_regions, reference, sample1, sample2='', co
 def func_call_freebayes(output, exome_regions, reference, sample1, sample2=''):
     sample_list = [sample1] + [s for s in sample2]
 
-    click.echo('Calling variants on %s using Freebayes...' % ', '.join(sample_list))
+    broadcast_calling(sample_list, "Freebayes")
     call_args = [config['filePaths']['freebayes'], '-f', reference] + sample_list
     with open(output, 'w+') as call_out:
         subprocess.run(call_args, stdout=call_out)
@@ -149,7 +152,7 @@ def func_call_gatk(output, dbsnp, exome_regions, reference, sample1, sample2='')
             click.echo('Need to generate sample index .bai file!\nIndexing sample file %s...' % smpl)
             subprocess.run(['samtools', 'index', smpl])
 
-    click.echo('Calling variants on samples %s with GATK-HC...' % ', '.join(sample_list))
+    broadcast_calling(sample_list, "HaplotypeCaller")
     if dbsnp is None:
         gatk_args = [config['filePaths']['gatk4'], 'HaplotypeCaller', '-R', reference] + \
                     flatten_list([['-I'] + [sample_list[i]] for i in range(len(sample_list))]) + ['-O', output]
