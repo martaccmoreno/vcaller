@@ -78,29 +78,70 @@ def bed_intersect(vcf, bed, out=None, clean=False):
         out = remove_suffix(vcf)+'_exome.vcf'
     with open(out, 'w+') as out:
         click.echo('\nIntersecting vcf %s with bed file regions in %s...' % (vcf, bed))
-        subprocess.run('bedtools', 'intersect', '-header', '-a', vcf, '-b', bed, stdout=out)
+        subprocess.run(['bedtools', 'intersect', '-header', '-a', vcf, '-b', bed], stdout=out)
     if clean:
         cleanup(vcf)
 
 def timestamp():
+    """
+    Prints a pretty timestamp.
+    """
     return time.strftime("[%Y-%m-%d %H:%M]")
 
 ###########################
 ### BROADCAST FUNCTIONS ###
 ###########################
 
+
+# Short read alignment
 def broadcast_ref_index(suffixes, reference):
     if check_existence(suffixes):
-        click.echo('\n %s The following index files already exist:\n %s' % (timestamp(), ' '.join(suffixes)))
-        click.echo('\n %s Skipping reference genome indexing...' % timestamp())
+        click.echo("\n%s The following index files already exist:\n%s\nSkipping reference genome indexing..."
+                   % (timestamp(), '\n'.join(suffixes)))
     else:
-        click.echo('\n %s Need to generate index files for %s!'
-                   '\n %s Indexing reference genome %s...' % (timestamp(), reference, timestamp(), reference))
+        click.echo("\n%s Need to generate index files for %s! Indexing reference genome %s..." % (timestamp(),
+                                                                                                  reference, reference))
 
 
-def broadcast_alignment(reads, reference):
-    if len(reads) == 1:
-        click.echo('\n %s Aligning read %s against the reference genome %s...' % (timestamp(), reads[0], reference))
+def broadcast_alignment(reads, reference, aligned_reads):
+    if check_existence(aligned_reads):
+        click.echo("\n%s Aligned reads file %s already exists!\nSkipping read alignment step..." % (timestamp(),
+                                                                                                   aligned_reads))
     else:
-        click.echo('\n %s Aligning read(s) %s against the reference genome %s...' % (timestamp(), ' '.join(reads),
-                                                                                     reference))
+        if len(reads) == 1:
+            click.echo("\n%s Aligning read %s against the reference genome %s..." % (timestamp(), reads[0], reference))
+        else:
+            click.echo("\n%s Aligning the following read(s) against reference genome %s:\n%s" % (timestamp(),
+                                                                                                    reference,
+                                                                                                    '\n'.join(reads)))
+
+
+def broadcast_sort_convert(sam_file):
+    click.echo("\n%s Sorting and converting %s to the BAM format..." % (timestamp(), sam_file))
+
+
+# Variant calling and post-alignment processing
+def broadcast_calling(sample_list, variant_caller):
+    click.echo("\n%s Calling variants with %s on the the following samples:\n%s" % (timestamp(), variant_caller,
+                                                                              '\n'.join(sample_list)))
+
+
+def broadcast_faidx(reference):
+    faidx_file = reference + '.fai'
+    if check_existence([faidx_file]):
+        click.echo("\n%s Reference %s already has a faidx index file %s!\nSkipping faidx indexing." % (timestamp(),
+                                                                                                       reference, faidx_file))
+    else:
+        click.echo("\n%s Generating faidx index %s for reference file %s..." % (timestamp(), faidx_file, reference))
+
+
+def broadcast_dictionary(dict_file):
+    if check_existence([dict_file]):
+        click.echo("\n%s Dictionary file %s already exists!\nSkipping reference genome dictionary file generation..."
+                   % (timestamp(), dict_file))
+    else:
+        click.echo("\n%s Generating reference genome dictionary %s..." % (timestamp(), dict_file))
+
+
+def broadcast_indexing(sample_file):
+    click.echo("\n%s Indexing sample file %s..." % (timestamp(), sample_file))
