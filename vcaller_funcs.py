@@ -17,6 +17,7 @@ with open(os.path.join(current_dir, 'config.json'), 'r') as data_file:
 
 ### ALIGNERS ####
 def func_align_bowtie2(output, reference, read1, read2='', no_clean=False):
+    broadcast_step("alignment")
     suffix_list = ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', '.rev.1.bt2', '.rev.2.bt2']
     suffixes = [remove_suffix(reference) + suffix for suffix in suffix_list]
     broadcast_ref_index(suffixes, reference)
@@ -65,8 +66,11 @@ def func_align_bwa(output, reference, read1, read2='', no_clean=False):
     sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T',
                  os.path.join('/tmp/', replace_suffix(os.path.basename(output), 'tmp')), sam_output]
     broadcast_sort_convert(sam_output)
-    if not check_existence([sam_output]):
-        subprocess.run(sort_args)
+    if not check_existence([output]):
+        try:
+            subprocess.run(sort_args)
+        except subprocess.CalledProcessError as e:
+            print(e)
 
     if no_clean is False:
         cleanup(sam_output)
@@ -195,6 +199,7 @@ def func_call_varscan2(output, count_orphans, exome_regions, no_clean, reference
 ### POST-ALIGNMENT PROCESSING ####
 def func_process(output_name, output_dir, readgroup_info, add_known_indels, known_indels, known_snps, reference,
                  sample, no_clean=False):
+    broadcast_step("post-alignment processing")
     if output_dir is None:
         output_dir = os.path.dirname(output_name)
     smpl_name, smpl_extension = remove_suffix(os.path.basename(sample)), '.' + sample.split('.')[-1]

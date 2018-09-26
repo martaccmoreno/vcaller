@@ -92,6 +92,8 @@ def timestamp():
 ### BROADCAST FUNCTIONS ###
 ###########################
 
+def broadcast_step(step):
+    click.echo("\n%s Beginning %s step..." % (timestamp(), step))
 
 # Short read alignment
 def broadcast_ref_index(suffixes, reference):
