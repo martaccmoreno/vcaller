@@ -33,7 +33,7 @@ def func_align_bowtie2(output, reference, read1, read2='', no_clean=False):
     subprocess.run(align_args)
 
     sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T',
-                 os.path.join('/tmp/', replace_suffix(os.path.basename(output), 'tmp')), sam_output, output]
+                 os.path.join('/tmp/', replace_suffix(os.path.basename(output), 'tmp')), sam_output]
     broadcast_sort_convert(sam_output)
     if not check_existence([sam_output]):
         subprocess.run(sort_args)
@@ -58,7 +58,7 @@ def func_align_bwa(output, reference, read1, read2='', no_clean=False):
         subprocess.run(align_args, stdout=align_out)
 
     sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T',
-                 os.path.join('/tmp/', replace_suffix(os.path.basename(output), 'tmp')), sam_output, output]
+                 os.path.join('/tmp/', replace_suffix(os.path.basename(output), 'tmp')), sam_output]
     broadcast_sort_convert(sam_output)
     if not check_existence([sam_output]):
         subprocess.run(sort_args)
