@@ -36,8 +36,11 @@ def func_align_bowtie2(output, reference, read1, read2='', no_clean=False):
     sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T',
                  os.path.join('/tmp/', replace_suffix(os.path.basename(output), 'tmp')), sam_output]
     broadcast_sort_convert(sam_output)
-    if not check_existence([sam_output]):
-        subprocess.run(sort_args)
+    if not check_existence([output]):
+        try:
+            subprocess.run(sort_args)
+        except subprocess.CalledProcessError as e:
+            print(e)
 
     if no_clean is False:
         cleanup(sam_output)
