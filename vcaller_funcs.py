@@ -28,9 +28,10 @@ def func_align_bowtie2(output, reference, read1, read2='', no_clean=False):
     broadcast_alignment([read1, read2], reference, sam_output)
     align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', remove_suffix(reference), '-S', sam_output,
                   read1]
-    if read2 is not None:
-        align_args += [read2]
-    subprocess.run(align_args)
+    if not check_existence([sam_output]):
+        if read2 is not None:
+            align_args += [read2]
+        subprocess.run(align_args)
 
     sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T',
                  os.path.join('/tmp/', replace_suffix(os.path.basename(output), 'tmp')), sam_output]
@@ -52,10 +53,11 @@ def func_align_bwa(output, reference, read1, read2='', no_clean=False):
     sam_output = replace_suffix(output, 'sam')
     broadcast_alignment([read1, read2], reference, sam_output)
     align_args = ['bwa', 'mem', '-M', reference, read1]
-    if read2 is not '':
-        align_args += [read2]
-    with open(sam_output, "w+") as align_out:
-        subprocess.run(align_args, stdout=align_out)
+    if check_existence([sam_output]):
+        if read2 is not '':
+            align_args += [read2]
+        with open(sam_output, "w+") as align_out:
+            subprocess.run(align_args, stdout=align_out)
 
     sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T',
                  os.path.join('/tmp/', replace_suffix(os.path.basename(output), 'tmp')), sam_output]
@@ -75,16 +77,17 @@ def func_align_tmap(output, reference, read1, read2=''):
         index_args = [config['filePaths']['tmap'], 'index', '-f', reference]
         subprocess.run(index_args)
 
-    if read2 is None:  # if read is single-ended
-        align_args = [config['filePaths']['tmap'], 'map1', '-o', '2', '-f', reference, '-r', read1]
-        if read2 is not None:
-            align_args += [read2]
-        if 'gz' in read1.split('.') or 'gz' in read2.split('.'):
-            align_args += ['--input-gz']
-        broadcast_alignment([read1, read2], reference, output)
-        if not check_existence([output]):
-            with open(output, "w+") as align_out:
-                subprocess.run(align_args, stdout=align_out)
+    if not check_existence([output]):
+        if read2 is None:  # if read is single-ended
+            align_args = [config['filePaths']['tmap'], 'map1', '-o', '2', '-f', reference, '-r', read1]
+            if read2 is not None:
+                align_args += [read2]
+            if 'gz' in read1.split('.') or 'gz' in read2.split('.'):
+                align_args += ['--input-gz']
+            broadcast_alignment([read1, read2], reference, output)
+            if not check_existence([output]):
+                with open(output, "w+") as align_out:
+                    subprocess.run(align_args, stdout=align_out)
 
 
 ### VARIANT CALLERS ###

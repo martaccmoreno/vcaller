@@ -262,7 +262,7 @@ def run(output, exome_regions, add_known_indels, readgroup_info, aligner, caller
 
     # align
     if aligner.lower() == 'bowtie2':
-        func_align_bowtie2(align_out, reference, read1, read2)
+        func_align_bowtie2(align_out, reference, read1, read2, no_clean=True)
     elif aligner.lower() == 'bwa':
         func_align_bwa(align_out, reference, read1, read2)
     elif aligner.lower() == 'tmap':
@@ -275,7 +275,7 @@ def run(output, exome_regions, add_known_indels, readgroup_info, aligner, caller
 
     # call
     if caller.lower() == 'bcftools':
-        func_call_bcftools(output, exome_regions, reference, process_out)
+        func_call_bcftools(output, exome_regions, reference, process_out, no_clean=True)
     elif caller.lower() == 'freebayes':
         func_call_freebayes(output, exome_regions, reference, process_out)
     elif caller.lower() == 'gatk':
