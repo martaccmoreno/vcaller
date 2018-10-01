@@ -122,8 +122,8 @@ def call_freebayes(output, exome_regions, reference, sample1, sample2):
     func_call_freebayes(output, exome_regions, reference, sample1, sample2)
 
 
-@call.command('gatk')
-@click.option('--output', '-o', default='gatk_out.vcf',
+@call.command('haplotypecaller')
+@click.option('--output', '-o', default='haplotypecaller_out.vcf',
               help='Name of the output file (extension will be added automatically)')
 @click.option('--dbsnp', default=None, type=click.Path(exists=True), help='dbSNP file containing a database of '
                                                                           'known SNP IDs.')
@@ -131,7 +131,7 @@ def call_freebayes(output, exome_regions, reference, sample1, sample2):
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('sample1', type=click.Path(exists=True))
 @click.argument('sample2', required=False, type=click.Path(exists=True), nargs=-1)
-def call_gatk(output, dbsnp, exome_regions, reference, sample1, sample2):
+def call_haplotypecaller(output, dbsnp, exome_regions, reference, sample1, sample2):
     """Call variants using GATK's HaplotypeCaller.
     The GATK's HaplotypeCaller algorithm is used to call variants on aligned sequence files (samples).
 
@@ -145,7 +145,7 @@ def call_gatk(output, dbsnp, exome_regions, reference, sample1, sample2):
     on input files: it ensures that the reference has been indexed through samtools faidx and had a dictionary
     generated through Picard's CreateSequenceDictionary, then it applies the samtools index command on each sample.
     """
-    func_call_gatk(output, dbsnp, exome_regions, reference, sample1, sample2)
+    func_call_haplotypecaller(output, dbsnp, exome_regions, reference, sample1, sample2)
 
 
 @call.command('tvc')
@@ -258,7 +258,7 @@ def compare(output_dir, bed_file, evaluation_regions, score_field, sample, refer
 def run(output, exome_regions, add_known_indels, readgroup_info, aligner, caller, known_indels, known_snps,
         reference, read1, read2):
     align_out = aligner+'_out.bam'
-    process_out = aligner+'_out.bam.processed.bam'
+    process_out = aligner+'_out.processed.bam'
 
     # align
     if aligner.lower() == 'bowtie2':
@@ -271,20 +271,20 @@ def run(output, exome_regions, add_known_indels, readgroup_info, aligner, caller
         raise ValueError('The chosen aligner is not valid. Try one of the following: "bowtie2", "bwa", or "tmap".')
 
     # process
-    func_process(process_out, '.', readgroup_info, add_known_indels, known_indels, known_snps, reference, align_out)
+    func_process(process_out, '.', readgroup_info, add_known_indels, known_indels, known_snps, reference, align_out, no_clean=True)
 
     # call
     if caller.lower() == 'bcftools':
         func_call_bcftools(output, exome_regions, reference, process_out, no_clean=True)
     elif caller.lower() == 'freebayes':
         func_call_freebayes(output, exome_regions, reference, process_out)
-    elif caller.lower() == 'gatk':
-        func_call_gatk(output, known_snps, exome_regions, reference, process_out)
+    elif caller.lower() == 'haplotypecaller' or caller.lower() == 'gatk':
+        func_call_haplotypecaller(output, known_snps, exome_regions, reference, process_out)
     elif caller.lower() == 'tvc':
         func_call_tvc(remove_suffix(output), exome_regions, reference, process_out)
     else:
         raise ValueError('The chosen caller is not valid. Try one of the following: "bcftools", "freebayes", '
-                         '"gatk", or "tvc".')
+                         '"haplotypecaller", or "tvc".')
 
     return 'Finished!'
 
