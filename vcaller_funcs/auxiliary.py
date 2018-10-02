@@ -10,23 +10,28 @@ import re
 ###########################
 ### AUXILIARY FUNCTIONS ###
 ###########################
+def import_config(config_json: str) -> dict:
+    """
+    Imports a json configuration file as a dictionary.
+    :param config_json: The json file containing configuration info.
+    :return: A dictionary encoding the information provided by the json file.
+    """
+    basepath = os.path.dirname(__file__)
+    filepath = os.path.abspath(os.path.join(basepath, "..",  config_json))
+    with open(filepath, 'r') as json_file:
+        return json.load(json_file)
 
-def import_config():
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    with open(os.path.join(current_dir, 'config.json'), 'r') as data_file:
-        return json.load(data_file)
-
-def flatten_list(list_of_list: list):
+def flatten_list(list_of_list: list) -> list:
     """Flatten a list of list into a single list."""
     return [item for sublist in list_of_list for item in sublist]
 
 
-def remove_suffix(file_name: str):
+def remove_suffix(file_name: str) -> str:
     """Remove the suffix of a filename, e.g. 'reference.fa' becomes 'reference'"""
     return '.'.join(file_name.split('.')[:-1])
 
 
-def replace_suffix(filename: str, new_suffix: str):
+def replace_suffix(filename: str, new_suffix: str) -> str:
     """
     Replaces a filename's suffix with another user-specified suffix.
     '"""
@@ -36,11 +41,9 @@ def replace_suffix(filename: str, new_suffix: str):
         return remove_suffix(filename) + '.' + new_suffix
 
 
-def check_existence(filename_list: list):
+def check_existence(filename_list: list) -> bool:
     """
     Check if files with the filenames in the list already exist in the working directory.
-    :param filename_list:
-    :return:
     """
     if type(filename_list) is str:
         filename_list = [filename_list]
@@ -50,15 +53,13 @@ def check_existence(filename_list: list):
         return False
 
 
-def tabix_index(gzipped_files: list):
+def tabix_index(bgzipped_files: list) -> None:
     """
-    Tabix index gzipped files, or gzip then index regular files.
-    :param gzipped_files: list of files to index.
+    Tabix index bgzipped files, or bgzip then index regular files, or gunzip then bgzip then index gzipped files.
+    :param bgzipped_files: list of files to index.
     :return: None
     """
-    if type(gzipped_files) is not list:
-        gzipped_files = [gzipped_files]
-    for file in gzipped_files:
+    for file in bgzipped_files:
         if '.gz' in file:
             click.echo('\nGunzipping %s...' % file)
             subprocess.run(['gunzip', file])
@@ -73,14 +74,12 @@ def tabix_index(gzipped_files: list):
             subprocess.run(['tabix', file + '.gz'])
 
 
-def cleanup(files_or_dirs: list):
+def cleanup(files_or_dirs: list) -> None:
     """
     Permanently remove one or more files or directories.
     :param files_or_dirs: a list of files and/or directories to remove
     :return: None
     """
-    if type(files_or_dirs) is not list:
-        files_or_dirs = [files_or_dirs]
     click.echo('\nRemoving the following files/directories: %s' % ', '.join(files_or_dirs))
     for file_or_dir in files_or_dirs:
         if os.path.isfile(file_or_dir):
@@ -91,7 +90,7 @@ def cleanup(files_or_dirs: list):
             click.echo('\nInvalid input: %s is neither a file nor a directory...' % file_or_dir)
 
 
-def bed_intersect(vcf, bed, out=None, clean=False):
+def bed_intersect(vcf: str, bed: str, out: str = None, clean: bool = False) -> None:
     """
     Intersect a vcf file with a bed file, obtaining a second vcf file with only the regions defined in the bed file.
     """
@@ -101,18 +100,19 @@ def bed_intersect(vcf, bed, out=None, clean=False):
         click.echo('\nIntersecting vcf %s with bed file regions in %s...' % (vcf, bed))
         subprocess.run(['bedtools', 'intersect', '-header', '-a', vcf, '-b', bed], stdout=out)
     if clean:
-        cleanup(vcf)
+        cleanup([vcf])
 
-def timestamp():
+
+def timestamp() -> str:
     """
     Prints a pretty timestamp.
     """
     return time.strftime("[%Y-%m-%d %H:%M]")
 
+
 ###########################
 ### BROADCAST FUNCTIONS ###
 ###########################
-
 def broadcast_step(step):
     click.echo("\n%s Starting %s step." % (timestamp(), step))
 
@@ -124,7 +124,6 @@ def broadcast_error(error_code, command, error_message):
     raise subprocess.CalledProcessError(error_code, command)
 
 
-# Short read alignment
 def broadcast_ref_index(suffixes, reference):
     if check_existence(suffixes):
         click.echo("\n%s The following index files already exist:\n%s" % (timestamp(), '\n'.join(suffixes)))
@@ -151,7 +150,6 @@ def broadcast_sort_convert(sam_file):
     click.echo("\n%s Sorting and converting %s to the BAM format..." % (timestamp(), sam_file))
 
 
-# Variant calling and post-alignment processing
 def broadcast_calling(sample_list, variant_caller):
     click.echo("\n%s Calling variants with %s on the the following samples:\n%s" % (timestamp(), variant_caller,
                                                                               '\n'.join(sample_list)))
@@ -229,3 +227,9 @@ def progress_bar(process: subprocess.Popen, bar: IncrementalBar):
     process.communicate()
     if process.returncode > 0:
         broadcast_error(process.returncode, process, error_message)
+
+
+#########################
+### IMPORT TOOL PATHS ###
+#########################
+config = import_config('tool_paths.json')

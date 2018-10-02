@@ -1,10 +1,6 @@
-from vcaller_funcs import *
-from auxiliary_funcs import remove_suffix
-
-current_dir = os.path.dirname(os.path.abspath(__file__))
-with open(os.path.join(current_dir, 'config.json'), 'r') as data_file:
-    config = json.load(data_file)
-
+from vcaller_funcs.align import *
+from vcaller_funcs.processing import *
+from vcaller_funcs.variant_calling import *
 
 ##################
 ### MAIN GROUP ###
