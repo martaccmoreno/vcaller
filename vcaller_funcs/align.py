@@ -11,6 +11,7 @@ def func_align_bowtie2(output, reference: str, read1: str, read2: str = '', no_c
     :param no_clean: Whether or not intermediate files should be removed.
     :return: None
     """
+    print(read1,read2)
     broadcast_step("alignment")
     suffix_list = ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', '.rev.1.bt2', '.rev.2.bt2']
     suffixes = [remove_suffix(reference) + suffix for suffix in suffix_list]
@@ -26,8 +27,9 @@ def func_align_bowtie2(output, reference: str, read1: str, read2: str = '', no_c
     align_args = [config['filePaths']['bowtie2'] + '/bowtie2', '-x', remove_suffix(reference), '-S', sam_output,
                   read1]
     if not check_existence([sam_output]):
-        if read2 is not None:
+        if read2 is not '':
             align_args += [read2]
+        print(align_args)
         align_proc = subprocess.Popen(align_args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
         align_spinner = PieSpinner("Aligning ")
         progress_spinner(align_proc, align_spinner)
@@ -67,10 +69,10 @@ def func_align_bwa(output: str, reference: str, read1: str, read2: str = '', no_
     sam_output = replace_suffix(output, 'sam')
     broadcast_alignment([read1, read2], reference, sam_output)
     align_args = ['bwa', 'mem', '-M', reference, read1]
-    if check_existence([sam_output]):
+    if not check_existence([sam_output]):
         if read2 is not '':
             align_args += [read2]
-        with open(sam_output, "w+") as align_out:
+        with open(sam_output, "wb") as align_out:
             align_proc = subprocess.Popen(align_args, stderr=subprocess.PIPE, stdout=align_out)
             align_spinner = PieSpinner("Aligning ")
             progress_spinner(align_proc, align_spinner)

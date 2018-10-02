@@ -35,7 +35,7 @@ def align():
 @click.option('--no-clean', is_flag=True, help='Do not remove intermidiary files')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('read1', type=click.Path(exists=True))
-@click.argument('read2', required=False, type=click.Path(exists=True))
+@click.argument('read2', required=False, default='')
 def align_bowtie2(output, reference, read1, read2, no_clean):
     """Use the FM-index tool Bowtie 2 for alignment.
     Requires Bowtie 2: http://bowtie-bio.sourceforge.net/bowtie2/index.shtml
@@ -65,7 +65,7 @@ def align_bwa(output, reference, read1, read2, no_clean):
               help='Name of the output file (extension will be added automatically)')
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('read1', type=click.Path(exists=True))
-@click.argument('read2', required=False, type=click.Path(exists=True))
+@click.argument('read2', required=False, default='')
 def align_tmap(output, reference, read1, read2):
     """Use the Ion Torrent-specific aligner TMAP.
     It is only mandatory to include the reference genome file and the reads of a sample as arguments.
@@ -259,9 +259,9 @@ def pipeline(output, exome_regions, add_known_indels, readgroup_info, aligner, c
 
     # align
     if aligner.lower() == 'bowtie2':
-        func_align_bowtie2(align_out, reference, read1, read2, no_clean=True)
+        func_align_bowtie2(align_out, reference, read1, read2)
     elif aligner.lower() == 'bwa':
-        func_align_bwa(align_out, reference, read1, read2, no_clean=True)
+        func_align_bwa(align_out, reference, read1, read2)
     elif aligner.lower() == 'tmap':
         func_align_tmap(align_out, reference, read1, read2)
     else:
