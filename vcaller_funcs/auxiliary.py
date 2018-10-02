@@ -129,8 +129,7 @@ def broadcast_ref_index(suffixes, reference):
         click.echo("\n%s The following index files already exist:\n%s" % (timestamp(), '\n'.join(suffixes)))
         click.echo("\n%s Skipping reference genome indexing." % timestamp())
     else:
-        click.echo("\n%s Need to generate index files for %s! Indexing reference genome %s..." % (timestamp(),
-                                                                                                  reference, reference))
+        click.echo("\n%s Need to generate index files for %s!" % (timestamp(), reference))
 
 
 def broadcast_alignment(reads, reference, aligned_reads):

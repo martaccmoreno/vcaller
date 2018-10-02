@@ -83,10 +83,6 @@ def func_process(output_name: str, output_dir: str, readgroup_info: str, add_kno
         if not check_existence(dup_output+'.bai'):
             broadcast_indexing(rg_output)
             subprocess.run(['samtools', 'index', rg_output])
-    # elif not check_existence(dup_output+'.bai'):
-    #     broadcast_indexing(dup_output)
-    #     subprocess.run(['samtools', 'index', dup_output])
-
 
     # Realign around indels; using gatk3 because of this step
     # https://gatkforums.broadinstitute.org/gatk/discussion/11455/realignertargetcreator-and-indelrealigner

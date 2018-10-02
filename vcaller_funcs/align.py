@@ -1,4 +1,5 @@
 from vcaller_funcs.auxiliary import *
+from progress.spinner import PieSpinner
 
 
 def func_align_bowtie2(output, reference: str, read1: str, read2: str = '', no_clean: bool = False) -> None:
@@ -17,7 +18,9 @@ def func_align_bowtie2(output, reference: str, read1: str, read2: str = '', no_c
     broadcast_ref_index(suffixes, reference)
     if not check_existence(suffixes):
         index_args = [config['filePaths']['bowtie2'] + '/bowtie2-build', reference, remove_suffix(reference)]
-        subprocess.run(index_args)
+        index_proc = subprocess.Popen(index_args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        index_spinner = Spinner("\n%s Indexing reference genome %s " % (timestamp(), reference))
+        progress_spinner(index_proc, index_spinner)
 
     sam_output = replace_suffix(output, 'sam')
     broadcast_alignment([read1, read2], reference, sam_output)
@@ -26,7 +29,9 @@ def func_align_bowtie2(output, reference: str, read1: str, read2: str = '', no_c
     if not check_existence([sam_output]):
         if read2 is not None:
             align_args += [read2]
-        subprocess.run(align_args)
+        align_proc = subprocess.Popen(align_args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        align_spinner = PieSpinner("")
+        progress_spinner(align_proc, align_spinner)
 
     if not check_existence([output]):
         sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T',
@@ -38,7 +43,7 @@ def func_align_bowtie2(output, reference: str, read1: str, read2: str = '', no_c
             print(e)
 
     if no_clean is False:
-        cleanup(sam_output)
+        cleanup([sam_output])
 
 
 def func_align_bwa(output: str, reference: str, read1: str, read2: str = '', no_clean: bool = False) -> None:
