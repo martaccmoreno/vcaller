@@ -45,10 +45,8 @@ def replace_suffix(filename: str, new_suffix: str) -> str:
 
 def check_existence(filename_list: list) -> bool:
     """
-    Check if files with the filenames in the list already exist in the working directory.
+    Check if files with the filenames in the list already exist.
     """
-    if type(filename_list) is str:
-        filename_list = [filename_list]
     if sum([os.path.isfile(ifile) for ifile in filename_list]) == len(filename_list):
         return True
     else:
@@ -126,7 +124,7 @@ def broadcast_error(error_code, command, error_message):
     raise subprocess.CalledProcessError(error_code, command)
 
 
-def broadcast_ref_index(suffixes, reference):
+def broadcast_ref_index(suffixes: list, reference: str):
     if check_existence(suffixes):
         click.echo("%s The following index files already exist:\n%s" % (timestamp(), '\n'.join(suffixes)))
         click.echo("%s Skipping reference genome indexing." % timestamp())
@@ -188,7 +186,6 @@ def progress_spinner(process: subprocess.Popen, spinner: PieSpinner):
     :return: A progress message that updates as the process runs.
     """
     error_message = ""
-    # ensure spinner always starts
     spinner.start()
     spinner.next()
     while True:

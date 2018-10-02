@@ -252,14 +252,14 @@ def compare(output_dir, bed_file, evaluation_regions, score_field, sample, refer
 @click.argument('reference', type=click.Path(exists=True))
 @click.argument('read1', type=click.Path(exists=True))
 @click.argument('read2', required=False, default='')
-def run(output, exome_regions, add_known_indels, readgroup_info, aligner, caller, known_indels, known_snps,
+def pipeline(output, exome_regions, add_known_indels, readgroup_info, aligner, caller, known_indels, known_snps,
         reference, read1, read2):
     align_out = aligner+'_out.bam'
     process_out = aligner+'_out.processed.bam'
 
     # align
     if aligner.lower() == 'bowtie2':
-        func_align_bowtie2(align_out, reference, read1, read2)
+        func_align_bowtie2(align_out, reference, read1, read2, no_clean=True)
     elif aligner.lower() == 'bwa':
         func_align_bwa(align_out, reference, read1, read2, no_clean=True)
     elif aligner.lower() == 'tmap':

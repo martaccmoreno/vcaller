@@ -56,7 +56,7 @@ def func_align_bwa(output: str, reference: str, read1: str, read2: str = '', no_
     :return: None
     """
     suffix_list = ['.amb', '.ann', '.bwt', '.pac', '.sa']
-    suffixes = [remove_suffix(reference) + suffix for suffix in suffix_list]
+    suffixes = [reference + suffix for suffix in suffix_list]
     broadcast_ref_index(suffixes, reference)
     if not check_existence([reference + suffix for suffix in suffix_list]):
         index_args = ['bwa', 'index', reference]
