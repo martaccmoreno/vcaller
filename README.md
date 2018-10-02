@@ -35,6 +35,7 @@ Requirements
 
 Software required to run all vcaller features:
 
+* bedtools (https://bedtools.readthedocs.io/en/latest/)
 * Bowtie 2*
 (http://bowtie-bio.sourceforge.net/bowtie2/index.shtml)
 * GATK3*

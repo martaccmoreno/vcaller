@@ -39,7 +39,7 @@ def func_process(output_name: str, output_dir: str, readgroup_info: str, add_kno
     if (smpl_extension is not '.bam') or (subprocess.getstatusoutput('samtools index ' + sample)[0] != 0):
         sorted_output = replace_suffix(sample, 'bam')
         if not check_existence([sorted_output]):
-            broadcast_sort_convert(sample)
+            broadcast_sorting(sample)
             try:
                 sort_args = ['samtools', 'sort', '-O', 'bam', '-o', sorted_output, '-T',
                              os.path.join('/tmp/', smpl_name + '.temp'), sample]
@@ -63,7 +63,7 @@ def func_process(output_name: str, output_dir: str, readgroup_info: str, add_kno
                 '-M', os.path.join(output_dir, smpl_name + '.metrics')]
     if not check_existence(dup_output):
         dedup_proc = subprocess.Popen(dup_args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-        dedup_spinner = Spinner("\n%s Marking and removing duplicates for %s " % (timestamp(), sample))
+        dedup_spinner = PieSpinner("%s Marking and removing duplicates for %s " % (timestamp(), sample))
         progress_spinner(dedup_proc, dedup_spinner)
 
     # More info on RGs: https://gatkforums.broadinstitute.org/gatk/discussion/6472/read-groups
@@ -78,7 +78,7 @@ def func_process(output_name: str, output_dir: str, readgroup_info: str, add_kno
                    '-RGPL', read_groups['PL'].upper(), '-RGPU', read_groups['PU'], '-RGSM', read_groups['SM'],
                    '-SO', 'coordinate']
         rg_proc = subprocess.Popen(rg_args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-        rg_spinner = Spinner("\n%s Adding Read Group information to %s " % (timestamp(), sample))
+        rg_spinner = PieSpinner("%s Adding Read Group information to %s " % (timestamp(), sample))
         progress_spinner(rg_proc, rg_spinner)
         if not check_existence(dup_output+'.bai'):
             broadcast_indexing(rg_output)
@@ -93,7 +93,6 @@ def func_process(output_name: str, output_dir: str, readgroup_info: str, add_kno
                       known_indels]
     if not check_existence([intervals_output]):
         intervals_proc = subprocess.Popen(intervals_args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-        click.echo("") # create only ONE newline, not one every time the bar updates
         intervals_bar = IncrementalBar("%s Creating indel realignment intervals for %s " % (timestamp(), rg_output),
                                        suffix='%(percent).1f%% - %(elapsed)ds')
         intervals_bar.start()
@@ -105,7 +104,6 @@ def func_process(output_name: str, output_dir: str, readgroup_info: str, add_kno
                         '-I', rg_output, '-targetIntervals', intervals_output, '-known', known_indels] + \
                        flatten_list([['-known'] + [add_known_indels[i]] for i in range(len(add_known_indels))]) + \
                        ['-o', realign_output]
-        click.echo("") # create only ONE newline, not one every time the bar updates
         realign_proc = subprocess.Popen(realign_args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
         realign_bar = IncrementalBar("%s Applying indel realignment to %s " % (timestamp(), rg_output),
                                      suffix='%(percent).1f%% - %(elapsed)ds')
@@ -118,7 +116,7 @@ def func_process(output_name: str, output_dir: str, readgroup_info: str, add_kno
         table_args = [config['filePaths']['gatk4'], 'BaseRecalibrator', '-R', reference,
                       '--known-sites', known_snps] + ['-I', realign_output, '-O', table_output]
         table_proc = subprocess.Popen(table_args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-        table_spinner = Spinner("\n%s Creating base score recalibration table for %s " % (timestamp(), sample))
+        table_spinner = PieSpinner("\n%s Creating base score recalibration table for %s " % (timestamp(), sample))
         progress_spinner(table_proc, table_spinner)
     if output_name is None:
         bqsr_output = os.path.join(output_dir, smpl_name + '.processed.bam')
@@ -128,7 +126,7 @@ def func_process(output_name: str, output_dir: str, readgroup_info: str, add_kno
         bqsr_args = [config['filePaths']['gatk4'], 'ApplyBQSR',
                      '-I', realign_output, '-bqsr', table_output, '-O', bqsr_output]
         bqsr_proc = subprocess.Popen(bqsr_args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-        bqsr_spinner = Spinner("\n%s Running base score recalibration on %s " % (timestamp(), realign_output))
+        bqsr_spinner = PieSpinner("\n%s Running base score recalibration on %s " % (timestamp(), realign_output))
         progress_spinner(bqsr_proc, bqsr_spinner)
 
     if check_existence([bqsr_output]) and no_clean is False:

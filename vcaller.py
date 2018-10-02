@@ -259,9 +259,9 @@ def run(output, exome_regions, add_known_indels, readgroup_info, aligner, caller
 
     # align
     if aligner.lower() == 'bowtie2':
-        func_align_bowtie2(align_out, reference, read1, read2, no_clean=True)
+        func_align_bowtie2(align_out, reference, read1, read2)
     elif aligner.lower() == 'bwa':
-        func_align_bwa(align_out, reference, read1, read2)
+        func_align_bwa(align_out, reference, read1, read2, no_clean=True)
     elif aligner.lower() == 'tmap':
         func_align_tmap(align_out, reference, read1, read2)
     else:

@@ -1,5 +1,4 @@
 from vcaller_funcs.auxiliary import *
-from progress.spinner import PieSpinner
 
 
 def func_align_bowtie2(output, reference: str, read1: str, read2: str = '', no_clean: bool = False) -> None:
@@ -19,7 +18,7 @@ def func_align_bowtie2(output, reference: str, read1: str, read2: str = '', no_c
     if not check_existence(suffixes):
         index_args = [config['filePaths']['bowtie2'] + '/bowtie2-build', reference, remove_suffix(reference)]
         index_proc = subprocess.Popen(index_args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-        index_spinner = Spinner("\n%s Indexing reference genome %s " % (timestamp(), reference))
+        index_spinner = PieSpinner("\n%s Indexing reference genome %s " % (timestamp(), reference))
         progress_spinner(index_proc, index_spinner)
 
     sam_output = replace_suffix(output, 'sam')
@@ -30,15 +29,15 @@ def func_align_bowtie2(output, reference: str, read1: str, read2: str = '', no_c
         if read2 is not None:
             align_args += [read2]
         align_proc = subprocess.Popen(align_args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-        align_spinner = PieSpinner("")
+        align_spinner = PieSpinner("Aligning ")
         progress_spinner(align_proc, align_spinner)
 
     if not check_existence([output]):
         sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T',
                      os.path.join('/tmp/', replace_suffix(os.path.basename(output), 'tmp')), sam_output]
-        broadcast_sort_convert(sam_output)
+        broadcast_sorting(sam_output)
         try:
-            subprocess.run(sort_args)
+            subprocess.run(sort_args, check=True)
         except subprocess.CalledProcessError as e:
             print(e)
 
@@ -60,7 +59,10 @@ def func_align_bwa(output: str, reference: str, read1: str, read2: str = '', no_
     suffixes = [remove_suffix(reference) + suffix for suffix in suffix_list]
     broadcast_ref_index(suffixes, reference)
     if not check_existence([reference + suffix for suffix in suffix_list]):
-        subprocess.run(['bwa', 'index', reference])
+        index_args = ['bwa', 'index', reference]
+        index_proc = subprocess.Popen(index_args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        index_spinner = PieSpinner("%s Indexing reference genome %s " % (timestamp(), reference))
+        progress_spinner(index_proc, index_spinner)
 
     sam_output = replace_suffix(output, 'sam')
     broadcast_alignment([read1, read2], reference, sam_output)
@@ -69,11 +71,13 @@ def func_align_bwa(output: str, reference: str, read1: str, read2: str = '', no_
         if read2 is not '':
             align_args += [read2]
         with open(sam_output, "w+") as align_out:
-            subprocess.run(align_args, stdout=align_out)
+            align_proc = subprocess.Popen(align_args, stderr=subprocess.PIPE, stdout=align_out)
+            align_spinner = PieSpinner("Aligning ")
+            progress_spinner(align_proc, align_spinner)
 
     sort_args = ['samtools', 'sort', '-O', 'bam', '-o', output, '-T',
                  os.path.join('/tmp/', replace_suffix(os.path.basename(output), 'tmp')), sam_output]
-    broadcast_sort_convert(sam_output)
+    broadcast_sorting(sam_output)
     if not check_existence([output]):
         try:
             subprocess.run(sort_args, check=True)
@@ -81,7 +85,7 @@ def func_align_bwa(output: str, reference: str, read1: str, read2: str = '', no_
             print(e)
 
     if no_clean is False:
-        cleanup(sam_output)
+        cleanup([sam_output])
 
 
 def func_align_tmap(output: str, reference: str, read1: str, read2: str = '') -> None:
@@ -98,10 +102,12 @@ def func_align_tmap(output: str, reference: str, read1: str, read2: str = '') ->
     broadcast_ref_index(suffixes, reference)
     if not check_existence([reference + suffix for suffix in suffix_list]):
         index_args = [config['filePaths']['tmap'], 'index', '-f', reference]
-        subprocess.run(index_args)
+        index_proc = subprocess.Popen(index_args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        index_spinner = PieSpinner("\n%s Indexing reference genome %s " % (timestamp(), reference))
+        progress_spinner(index_proc, index_spinner)
 
     if not check_existence([output]):
-        if read2 is None:  # if read is single-ended
+        if read2 is None:
             align_args = [config['filePaths']['tmap'], 'map1', '-o', '2', '-f', reference, '-r', read1]
             if read2 is not None:
                 align_args += [read2]
@@ -110,4 +116,6 @@ def func_align_tmap(output: str, reference: str, read1: str, read2: str = '') ->
             broadcast_alignment([read1, read2], reference, output)
             if not check_existence([output]):
                 with open(output, "w+") as align_out:
-                    subprocess.run(align_args, stdout=align_out)
+                    align_proc = subprocess.Popen(align_args, stderr=subprocess.PIPE, stdout=align_out)
+                    align_spinner = PieSpinner("Aligning ")
+                    progress_spinner(align_proc, align_spinner)

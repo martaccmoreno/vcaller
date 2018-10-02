@@ -3,9 +3,10 @@ import click
 import os
 import subprocess
 import time
-from progress.spinner import Spinner # new dependency
+from progress.spinner import PieSpinner # new dependency
 from progress.bar import IncrementalBar
 import re
+
 
 ###########################
 ### AUXILIARY FUNCTIONS ###
@@ -20,6 +21,7 @@ def import_config(config_json: str) -> dict:
     filepath = os.path.abspath(os.path.join(basepath, "..",  config_json))
     with open(filepath, 'r') as json_file:
         return json.load(json_file)
+
 
 def flatten_list(list_of_list: list) -> list:
     """Flatten a list of list into a single list."""
@@ -114,11 +116,11 @@ def timestamp() -> str:
 ### BROADCAST FUNCTIONS ###
 ###########################
 def broadcast_step(step):
-    click.echo("\n%s Starting %s step." % (timestamp(), step))
+    click.echo("%s *** Starting %s step. ***" % (timestamp(), step))
 
 
 def broadcast_error(error_code, command, error_message):
-    click.echo("\n%s An error has been found during Vcaller's execution:\n" % timestamp())
+    click.echo("%s An error has been found during Vcaller's execution:\n" % timestamp())
     if error_message:
         click.echo(error_message)
     raise subprocess.CalledProcessError(error_code, command)
@@ -126,10 +128,10 @@ def broadcast_error(error_code, command, error_message):
 
 def broadcast_ref_index(suffixes, reference):
     if check_existence(suffixes):
-        click.echo("\n%s The following index files already exist:\n%s" % (timestamp(), '\n'.join(suffixes)))
-        click.echo("\n%s Skipping reference genome indexing." % timestamp())
+        click.echo("%s The following index files already exist:\n%s" % (timestamp(), '\n'.join(suffixes)))
+        click.echo("%s Skipping reference genome indexing." % timestamp())
     else:
-        click.echo("\n%s Need to generate index files for %s!" % (timestamp(), reference))
+        click.echo("%s Need to generate index files for %s!" % (timestamp(), reference))
 
 
 def broadcast_alignment(reads, reference, aligned_reads):
@@ -137,48 +139,47 @@ def broadcast_alignment(reads, reference, aligned_reads):
         click.echo("\n%s Aligned reads file %s already exists!" % (timestamp(), aligned_reads))
         click.echo("\n%s Skipping read alignment step." % timestamp())
     else:
-        if len(reads) == 1:
-            click.echo("\n%s Aligning read %s against the reference genome %s..." % (timestamp(), reads[0], reference))
+        if len(list(filter(None, reads))) == 1:
+            click.echo("%s Aligning read %s against the reference genome %s..." % (timestamp(), reads[0], reference))
         else:
-            click.echo("\n%s Aligning the following read(s) against reference genome %s:\n%s" % (timestamp(),
-                                                                                                    reference,
-                                                                                                    '\n'.join(reads)))
+            click.echo("%s Aligning the following read(s) against reference genome %s:\n%s" % (timestamp(), reference,
+                                                                                                 '\n'.join(reads)))
 
 
-def broadcast_sort_convert(sam_file):
-    click.echo("\n%s Sorting and converting %s to the BAM format..." % (timestamp(), sam_file))
+def broadcast_sorting(unsorted_file):
+    click.echo("%s Sorting and converting %s to the BAM format." % (timestamp(), unsorted_file))
 
 
 def broadcast_calling(sample_list, variant_caller):
-    click.echo("\n%s Calling variants with %s on the the following samples:\n%s" % (timestamp(), variant_caller,
+    click.echo("%s Calling variants with %s on the the following samples:\n%s" % (timestamp(), variant_caller,
                                                                               '\n'.join(sample_list)))
 
 
 def broadcast_faidx(reference):
     faidx_file = reference + '.fai'
     if check_existence([faidx_file]):
-        click.echo("\n%s Reference %s already has a faidx index file %s!\nSkipping faidx indexing." % (timestamp(),
+        click.echo("%s Reference %s already has a faidx index file %s!\nSkipping faidx indexing." % (timestamp(),
                                                                                                        reference, faidx_file))
     else:
-        click.echo("\n%s Generating faidx index %s for reference file %s..." % (timestamp(), faidx_file, reference))
+        click.echo("%s Generating faidx index %s for reference file %s..." % (timestamp(), faidx_file, reference))
 
 
 def broadcast_dictionary(dict_file):
     if check_existence([dict_file]):
-        click.echo("\n%s Dictionary file %s already exists!\nSkipping reference genome dictionary file generation..."
+        click.echo("%s Dictionary file %s already exists!\nSkipping reference genome dictionary file generation..."
                    % (timestamp(), dict_file))
     else:
-        click.echo("\n%s Generating reference genome dictionary %s..." % (timestamp(), dict_file))
+        click.echo("%s Generating reference genome dictionary %s..." % (timestamp(), dict_file))
 
 
 def broadcast_indexing(sample_file):
-    click.echo("\n%s Indexing sample file %s..." % (timestamp(), sample_file))
+    click.echo("%s Indexing sample file %s." % (timestamp(), sample_file))
 
 
 ############################
 ### PROGRESS MEASUREMENT ###
 ############################
-def progress_spinner(process: subprocess.Popen, spinner: Spinner):
+def progress_spinner(process: subprocess.Popen, spinner: PieSpinner):
     """
     Create a spinner that is updated as a given process runs. Raise the exit status if any error is found during
     the process's execution.
@@ -187,6 +188,9 @@ def progress_spinner(process: subprocess.Popen, spinner: Spinner):
     :return: A progress message that updates as the process runs.
     """
     error_message = ""
+    # ensure spinner always starts
+    spinner.start()
+    spinner.next()
     while True:
         line = process.stderr.readline().decode('utf-8')
         error_message += line
@@ -209,6 +213,8 @@ def progress_bar(process: subprocess.Popen, bar: IncrementalBar):
     :return: A progress message that updates as the process runs.
     """
     error_message = ""
+    bar.start()
+    bar.next()
     while True:
         line = process.stderr.readline().decode('utf-8')
         error_message += line
