@@ -1,6 +1,7 @@
 from vcaller_funcs.align import *
 from vcaller_funcs.processing import *
 from vcaller_funcs.variant_calling import *
+from vcaller_funcs.compare import *
 
 ##################
 ### MAIN GROUP ###
