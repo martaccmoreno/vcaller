@@ -1,6 +1,6 @@
 from vcaller_funcs.auxiliary import *
 
-def func_compare(output_dir, bed_file, evaluation_regions, score_field, sample, no_clean, reference, baseline, calls):
+def func_compare(output_dir, bed_file, evaluation_regions, score_field, sample, reference, baseline, calls, no_clean):
     # The reference genome must be converted to SDF
     sdf_ref = os.path.join(replace_suffix(reference, 'sdf'))
     if os.path.isdir(sdf_ref) is False:
@@ -12,10 +12,10 @@ def func_compare(output_dir, bed_file, evaluation_regions, score_field, sample, 
                    (timestamp(), os.path.basename(reference), sdf_ref))
     # Check if baseline and calls are tabix-indexed as this is a must for using vcfeval
     if not check_existence(baseline + '.tbi'):
-        tabix_index(baseline)
+        tabix_index([baseline])
         baseline += '.gz'
     if not check_existence(calls + '.tbi'):
-        tabix_index(calls)
+        tabix_index([calls])
         calls += '.gz'
     click.echo("\n%s Creating directory %s..." % (timestamp(), output_dir))
     # Create GA4GH-compliant annotated VCFs

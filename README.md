@@ -4,7 +4,7 @@ Vcaller
 Variant calling, while simple in principle, can quickly become a daunting task to the
 to the average user, as the typical pipeline requires back-and-forth
 usage and configuration of multiple command line tools.
-V*plify this task by serving
+Vcaller simplifies this task by serving
 as a wrapper which combines multiple pre-existing bioinformatics 
 tools into a single package. Vcaller is a command line tool
 composed by intuitive building-block commands which retain 

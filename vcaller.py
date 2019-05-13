@@ -11,7 +11,7 @@ from vcaller_funcs.compare import *
 @click.version_option()
 def cli():
     """
-    Vcaller, a CLI capable of evoking multiple pre-existing bioinformatics tools, ecletically grouping them into
+    Vcaller, a CLI capable of invoking multiple pre-existing bioinformatics tools, ecletically grouping them into
     commands and subcommands that will perform common variant calling and benchmarking routines.
     """
 

@@ -138,7 +138,7 @@ def broadcast_alignment(reads, reference, aligned_reads):
         click.echo("\n%s Skipping read alignment step." % timestamp())
     else:
         if len(list(filter(None, reads))) == 1:
-            click.echo("%s Aligning read %s against the reference genome %s..." % (timestamp(), reads[0], reference))
+            click.echo("%s Aligning read %s against the reference genome %s." % (timestamp(), reads[0], reference))
         else:
             click.echo("%s Aligning the following read(s) against reference genome %s:\n%s" % (timestamp(), reference,
                                                                                                  '\n'.join(reads)))

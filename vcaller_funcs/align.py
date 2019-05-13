@@ -117,7 +117,7 @@ def func_align_tmap(output: str, reference: str, read1: str, read2: str = '') ->
                 align_args += ['--input-gz']
             broadcast_alignment([read1, read2], reference, output)
             if not check_existence([output]):
-                with open(output, "w+") as align_out:
+                with open(output, "wb") as align_out:
                     align_proc = subprocess.Popen(align_args, stderr=subprocess.PIPE, stdout=align_out)
                     align_spinner = PieSpinner("Aligning ")
                     progress_spinner(align_proc, align_spinner)
